@@ -1,0 +1,20 @@
+services:
+  todo-app:
+    build: .
+    ports:
+      - "3012:3012"
+    environment:
+      - NODE_ENV=development
+      - DB_HOST=host.docker.internal  # Connect to host PostgreSQL
+      - DB_PORT=5432
+      - DB_NAME=todo_app
+      - DB_USER=davidoxtoby
+      - DB_PASSWORD=  # No password
+      - PORT=3012
+    volumes:
+      # Hot reload - mount source code
+      - ./:/app
+      - /app/node_modules
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped

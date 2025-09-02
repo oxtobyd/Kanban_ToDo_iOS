@@ -1,0 +1,42 @@
+services:
+  todo-app:
+    build: 
+      context: .
+      dockerfile: Dockerfile.prod
+    ports:
+      - "3012:3012"
+    environment:
+      - NODE_ENV=production
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=todo_app
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres123
+      - PORT=3012
+    depends_on:
+      - postgres
+    networks:
+      - todo-network
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=todo_app
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres123
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    networks:
+      - todo-network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+
+networks:
+  todo-network:
+    driver: bridge
