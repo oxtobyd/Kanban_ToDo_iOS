@@ -4,6 +4,12 @@ A modern, responsive Kanban-style todo application built with Node.js, Express, 
 
 ![Kanban Todo Board](https://img.shields.io/badge/Status-Active-green) ![Node.js](https://img.shields.io/badge/Node.js-18+-green) ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-13+-blue)
 
+## 📸 Screenshot
+
+![Kanban Board Interface](docs/images/kanban-board-screenshot.png)
+
+*The Kanban board showing tasks organized across four columns with priority indicators, tags, and pending workflow*
+
 ## ✨ Features
 
 ### 🎯 Core Functionality
