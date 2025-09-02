@@ -82,6 +82,24 @@ router.patch('/tasks/:id/status', async (req, res) => {
   }
 });
 
+// Update task priority
+router.patch('/tasks/:id/priority', async (req, res) => {
+  const { id } = req.params;
+  const { priority } = req.body;
+  try {
+    const result = await pool.query(
+      'UPDATE tasks SET priority = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *',
+      [priority, id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+    res.json(result.rows[0]);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Update task
 router.put('/tasks/:id', async (req, res) => {
   const { id } = req.params;

@@ -880,6 +880,66 @@ body {
     border-left-color: #48bb78;
 }
 
+/* Priority dropdown styles */
+.priority-badge {
+    cursor: pointer;
+    transition: all 0.2s ease;
+    user-select: none;
+}
+
+.priority-badge:hover {
+    transform: scale(1.05);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.priority-dropdown {
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    min-width: 120px;
+    overflow: hidden;
+    animation: dropdownFadeIn 0.15s ease-out;
+}
+
+@keyframes dropdownFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-5px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.priority-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    cursor: pointer;
+    font-size: 0.875rem;
+    font-weight: 500;
+    transition: background-color 0.15s ease;
+}
+
+.priority-option:hover {
+    background-color: #f7fafc;
+}
+
+.priority-option.selected {
+    background-color: #edf2f7;
+    font-weight: 600;
+}
+
+.priority-color {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
 /* Responsive adjustments */
 @media (max-width: 768px) {
     .header-controls {

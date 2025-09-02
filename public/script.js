@@ -184,7 +184,7 @@ class TodoApp {
             <div class="task-card ${priorityClass}" draggable="true" data-task-id="${task.id}">
                 <div class="task-header">
                     <div class="task-title">${title}</div>
-                    <div class="priority-badge priority-${task.priority || 'medium'}">${priorityLabel}</div>
+                    <div class="priority-badge priority-${task.priority || 'medium'}" onclick="app.showPriorityDropdown(event, ${task.id}, '${task.priority || 'medium'}')" title="Click to change priority">${priorityLabel}</div>
                 </div>
                 <div class="task-description">${description}</div>
                 ${tagsHTML}
@@ -684,6 +684,77 @@ class TodoApp {
             }
         } catch (error) {
             console.error('Error deleting task:', error);
+        }
+    }
+
+    showPriorityDropdown(event, taskId, currentPriority) {
+        event.stopPropagation();
+        
+        // Remove any existing dropdown
+        this.closePriorityDropdown();
+        
+        const badge = event.target;
+        const dropdown = document.createElement('div');
+        dropdown.className = 'priority-dropdown';
+        dropdown.id = 'priority-dropdown';
+        
+        const priorities = [
+            { value: 'urgent', label: 'Urgent', color: '#e53e3e' },
+            { value: 'high', label: 'High', color: '#f39c12' },
+            { value: 'medium', label: 'Medium', color: '#667eea' },
+            { value: 'low', label: 'Low', color: '#38a169' }
+        ];
+        
+        dropdown.innerHTML = priorities.map(priority => `
+            <div class="priority-option ${priority.value === currentPriority ? 'selected' : ''}" 
+                 onclick="app.changePriority(${taskId}, '${priority.value}')"
+                 data-priority="${priority.value}">
+                <span class="priority-color" style="background-color: ${priority.color}"></span>
+                ${priority.label}
+            </div>
+        `).join('');
+        
+        // Position dropdown
+        const rect = badge.getBoundingClientRect();
+        dropdown.style.position = 'absolute';
+        dropdown.style.top = (rect.bottom + window.scrollY + 5) + 'px';
+        dropdown.style.left = (rect.left + window.scrollX) + 'px';
+        dropdown.style.zIndex = '1000';
+        
+        document.body.appendChild(dropdown);
+        
+        // Close dropdown when clicking outside
+        setTimeout(() => {
+            document.addEventListener('click', this.closePriorityDropdown.bind(this), { once: true });
+        }, 0);
+    }
+    
+    closePriorityDropdown() {
+        const dropdown = document.getElementById('priority-dropdown');
+        if (dropdown) {
+            dropdown.remove();
+        }
+    }
+    
+    async changePriority(taskId, newPriority) {
+        this.closePriorityDropdown();
+        
+        try {
+            const response = await fetch(`/api/tasks/${taskId}/priority`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ priority: newPriority }),
+            });
+
+            if (response.ok) {
+                await this.loadTasks();
+            } else {
+                console.error('Failed to update priority:', response.status, response.statusText);
+            }
+        } catch (error) {
+            console.error('Error updating task priority:', error);
         }
     }
 
