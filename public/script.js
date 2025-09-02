@@ -138,22 +138,24 @@ class TodoApp {
         await this.loadTasks();
     }
 
-    renderTasks() {
+    async renderTasks() {
         const columns = ['todo', 'in_progress', 'pending', 'done'];
         
-        columns.forEach(status => {
+        for (const status of columns) {
             const list = document.getElementById(`${status}-list`);
             const tasks = this.tasks.filter(task => task.status === status);
             
-            list.innerHTML = tasks.map(task => this.createTaskHTML(task)).join('');
+            const taskHTMLPromises = tasks.map(task => this.createTaskHTML(task));
+            const taskHTMLs = await Promise.all(taskHTMLPromises);
+            list.innerHTML = taskHTMLs.join('');
             
             // Update task count
             const countElement = document.querySelector(`[data-status="${status}"] .task-count`);
             countElement.textContent = tasks.length;
-        });
+        }
     }
 
-    createTaskHTML(task) {
+    async createTaskHTML(task) {
         const createdDate = new Date(task.created_at).toLocaleDateString();
         const priorityClass = `priority-${task.priority || 'medium'}`;
         const priorityLabel = this.getPriorityLabel(task.priority || 'medium');
@@ -180,6 +182,9 @@ class TodoApp {
                 <strong>Pending on:</strong> ${this.escapeHtml(task.pending_on)}
             </div>` : '';
         
+        // Get sub-tasks for this task
+        const subtasksHTML = await this.renderSubtasks(task.id);
+        
         return `
             <div class="task-card ${priorityClass}" draggable="true" data-task-id="${task.id}">
                 <div class="task-header">
@@ -189,6 +194,7 @@ class TodoApp {
                 <div class="task-description">${description}</div>
                 ${tagsHTML}
                 ${pendingReasonHTML}
+                ${subtasksHTML}
                 <div class="task-meta">
                     <span>${createdDate}</span>
                     <div class="task-actions">
@@ -923,6 +929,208 @@ class TodoApp {
         } catch (error) {
             console.error('Error deleting note:', error);
             alert('Error deleting note');
+        }
+    }
+
+    // Sub-tasks functionality
+    async renderSubtasks(taskId) {
+        try {
+            const response = await fetch(`/api/tasks/${taskId}/subtasks`);
+            const subtasks = await response.json();
+            
+            const completedCount = subtasks.filter(st => st.completed).length;
+            const totalCount = subtasks.length;
+            
+            const subtasksListHTML = subtasks.map(subtask => `
+                <div class="subtask-item" data-subtask-id="${subtask.id}">
+                    <div class="subtask-checkbox ${subtask.completed ? 'completed' : ''}" 
+                         onclick="app.toggleSubtask(${subtask.id})">
+                        ${subtask.completed ? '✓' : ''}
+                    </div>
+                    <div class="subtask-text ${subtask.completed ? 'completed' : ''}" 
+                         id="subtask-text-${subtask.id}">${this.escapeHtml(subtask.title)}</div>
+                    <div class="subtask-actions">
+                        <button class="subtask-edit-btn" onclick="app.editSubtask(${subtask.id}, '${this.escapeHtml(subtask.title).replace(/'/g, "\\'")}')">
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                <path d="m18.5 2.5 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                            </svg>
+                        </button>
+                        <button class="subtask-delete-btn" onclick="app.deleteSubtask(${subtask.id})">
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="18" y1="6" x2="6" y2="18"></line>
+                                <line x1="6" y1="6" x2="18" y2="18"></line>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+            
+            // Always show the sub-tasks section, even if empty
+            const summaryHTML = totalCount > 0 ? `<div class="subtasks-summary">${completedCount}/${totalCount}</div>` : '';
+            
+            const html = `
+                <div class="subtasks-section">
+                    <div class="subtasks-header" onclick="app.toggleSubtasksList(${taskId})">
+                        <div class="subtasks-toggle" id="subtasks-toggle-${taskId}">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="9,18 15,12 9,6"></polyline>
+                            </svg>
+                            Sub-tasks
+                        </div>
+                        ${summaryHTML}
+                    </div>
+                    <div class="subtasks-list expanded" id="subtasks-list-${taskId}">
+                        ${subtasksListHTML}
+                        <div class="add-subtask">
+                            <input type="text" id="new-subtask-${taskId}" placeholder="Add sub-task..." 
+                                   onkeypress="if(event.key==='Enter') app.addSubtask(${taskId})">
+                            <button onclick="app.addSubtask(${taskId})">Add</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // Auto-expand the toggle icon
+            setTimeout(() => {
+                const toggle = document.getElementById(`subtasks-toggle-${taskId}`);
+                if (toggle) toggle.classList.add('expanded');
+            }, 50);
+            
+            return html;
+        } catch (error) {
+            console.error('Error loading subtasks:', error);
+            return '';
+        }
+    }
+
+    toggleSubtasksList(taskId) {
+        const toggle = document.getElementById(`subtasks-toggle-${taskId}`);
+        const list = document.getElementById(`subtasks-list-${taskId}`);
+        
+        if (list.classList.contains('expanded')) {
+            list.classList.remove('expanded');
+            toggle.classList.remove('expanded');
+        } else {
+            list.classList.add('expanded');
+            toggle.classList.add('expanded');
+        }
+    }
+
+    // Auto-expand sub-tasks section after rendering
+    autoExpandSubtasks(taskId) {
+        setTimeout(() => {
+            const toggle = document.getElementById(`subtasks-toggle-${taskId}`);
+            const list = document.getElementById(`subtasks-list-${taskId}`);
+            
+            if (toggle && list) {
+                list.classList.add('expanded');
+                toggle.classList.add('expanded');
+            }
+        }, 100);
+    }
+
+    async addSubtask(taskId) {
+        const input = document.getElementById(`new-subtask-${taskId}`);
+        const title = input.value.trim();
+        
+        if (!title) return;
+        
+        try {
+            const response = await fetch(`/api/tasks/${taskId}/subtasks`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ title }),
+            });
+            
+            if (response.ok) {
+                input.value = '';
+                await this.loadTasks(); // Refresh to update subtasks
+            }
+        } catch (error) {
+            console.error('Error adding subtask:', error);
+        }
+    }
+
+    async toggleSubtask(subtaskId) {
+        try {
+            const response = await fetch(`/api/subtasks/${subtaskId}/toggle`, {
+                method: 'PATCH',
+            });
+            
+            if (response.ok) {
+                await this.loadTasks(); // Refresh to update subtasks
+            }
+        } catch (error) {
+            console.error('Error toggling subtask:', error);
+        }
+    }
+
+    editSubtask(subtaskId, currentTitle) {
+        const textElement = document.getElementById(`subtask-text-${subtaskId}`);
+        const originalHTML = textElement.innerHTML;
+        
+        textElement.innerHTML = `
+            <input type="text" class="subtask-edit-input" value="${currentTitle}" 
+                   onblur="app.saveSubtaskEdit(${subtaskId}, this.value, '${originalHTML}')"
+                   onkeypress="if(event.key==='Enter') this.blur(); if(event.key==='Escape') app.cancelSubtaskEdit(${subtaskId}, '${originalHTML}')"
+                   autofocus>
+        `;
+        
+        const input = textElement.querySelector('input');
+        input.focus();
+        input.select();
+    }
+
+    async saveSubtaskEdit(subtaskId, newTitle, originalHTML) {
+        const textElement = document.getElementById(`subtask-text-${subtaskId}`);
+        const title = newTitle.trim();
+        
+        if (!title) {
+            textElement.innerHTML = originalHTML;
+            return;
+        }
+        
+        try {
+            const response = await fetch(`/api/subtasks/${subtaskId}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ title, completed: false }),
+            });
+            
+            if (response.ok) {
+                await this.loadTasks(); // Refresh to update subtasks
+            } else {
+                textElement.innerHTML = originalHTML;
+            }
+        } catch (error) {
+            console.error('Error updating subtask:', error);
+            textElement.innerHTML = originalHTML;
+        }
+    }
+
+    cancelSubtaskEdit(subtaskId, originalHTML) {
+        const textElement = document.getElementById(`subtask-text-${subtaskId}`);
+        textElement.innerHTML = originalHTML;
+    }
+
+    async deleteSubtask(subtaskId) {
+        if (!confirm('Are you sure you want to delete this sub-task?')) return;
+        
+        try {
+            const response = await fetch(`/api/subtasks/${subtaskId}`, {
+                method: 'DELETE',
+            });
+            
+            if (response.ok) {
+                await this.loadTasks(); // Refresh to update subtasks
+            }
+        } catch (error) {
+            console.error('Error deleting subtask:', error);
         }
     }
 }

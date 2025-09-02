@@ -199,4 +199,82 @@ router.get('/tags', async (req, res) => {
   }
 });
 
+// Get sub-tasks for a task
+router.get('/tasks/:id/subtasks', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const result = await pool.query(
+      'SELECT * FROM sub_tasks WHERE task_id = $1 ORDER BY created_at ASC',
+      [id]
+    );
+    res.json(result.rows);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Add sub-task to task
+router.post('/tasks/:id/subtasks', async (req, res) => {
+  const { id } = req.params;
+  const { title } = req.body;
+  try {
+    const result = await pool.query(
+      'INSERT INTO sub_tasks (task_id, title) VALUES ($1, $2) RETURNING *',
+      [id, title]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update sub-task
+router.put('/subtasks/:id', async (req, res) => {
+  const { id } = req.params;
+  const { title, completed } = req.body;
+  try {
+    const result = await pool.query(
+      'UPDATE sub_tasks SET title = $1, completed = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3 RETURNING *',
+      [title, completed, id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Sub-task not found' });
+    }
+    res.json(result.rows[0]);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Toggle sub-task completion
+router.patch('/subtasks/:id/toggle', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const result = await pool.query(
+      'UPDATE sub_tasks SET completed = NOT completed, updated_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING *',
+      [id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Sub-task not found' });
+    }
+    res.json(result.rows[0]);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete sub-task
+router.delete('/subtasks/:id', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const result = await pool.query('DELETE FROM sub_tasks WHERE id = $1 RETURNING *', [id]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Sub-task not found' });
+    }
+    res.status(204).send();
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;
