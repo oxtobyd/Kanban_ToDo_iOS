@@ -1,0 +1,21 @@
+{
+  "appId": "com.fynesystems.kanbantodo",
+  "appName": "Kanban Todo",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "Preferences": {
+      "group": "group.com.fynesystems.kanbantodo"
+    }
+  },
+  "ios": {
+    "scheme": "Kanban Todo",
+    "backgroundColor": "#667eea",
+    "icloud": {
+      "container": "iCloud.com.fynesystems.kanbantodo",
+      "enabled": true
+    }
+  }
+}

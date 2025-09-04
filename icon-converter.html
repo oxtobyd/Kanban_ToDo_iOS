@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>iOS Icon Generator</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .preview {
+            text-align: center;
+            margin: 20px 0;
+        }
+        .icon-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .icon-item {
+            text-align: center;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+        .icon-item canvas {
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .download-btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            margin-top: 8px;
+        }
+        .download-btn:hover {
+            background: #5a67d8;
+        }
+        .instructions {
+            background: #e6fffa;
+            border: 1px solid #81e6d9;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        h1 {
+            color: #2d3748;
+            text-align: center;
+        }
+        h2 {
+            color: #4a5568;
+            border-bottom: 2px solid #e2e8f0;
+            padding-bottom: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎨 iOS App Icon Generator</h1>
+        <p>Generate all required iOS app icon sizes from your Kanban Todo logo.</p>
+        
+        <div class="instructions">
+            <h3>📋 Instructions:</h3>
+            <ol>
+                <li>Click "Generate Icons" below</li>
+                <li>Download each icon size by clicking the download buttons</li>
+                <li>Copy the downloaded PNG files to: <code>ios/App/App/Assets.xcassets/AppIcon.appiconset/</code></li>
+                <li>Build your app in Xcode to see the new icons!</li>
+            </ol>
+        </div>
+
+        <div class="preview">
+            <h2>Preview</h2>
+            <canvas id="preview" width="200" height="200" style="border-radius: 12px; box-shadow: 0 4px 8px rgba(0,0,0,0.2);"></canvas>
+        </div>
+
+        <button onclick="generateIcons()" style="background: #667eea; color: white; border: none; padding: 12px 24px; border-radius: 8px; font-size: 16px; cursor: pointer; display: block; margin: 20px auto;">
+            Generate iOS Icons
+        </button>
+
+        <div id="iconGrid" class="icon-grid"></div>
+    </div>
+
+    <script>
+        const iconSizes = [
+            { name: 'AppIcon-20.png', size: 20 },
+            { name: 'AppIcon-20@2x.png', size: 40 },
+            { name: 'AppIcon-20@3x.png', size: 60 },
+            { name: 'AppIcon-29.png', size: 29 },
+            { name: 'AppIcon-29@2x.png', size: 58 },
+            { name: 'AppIcon-29@3x.png', size: 87 },
+            { name: 'AppIcon-40.png', size: 40 },
+            { name: 'AppIcon-40@2x.png', size: 80 },
+            { name: 'AppIcon-40@3x.png', size: 120 },
+            { name: 'AppIcon-60@2x.png', size: 120 },
+            { name: 'AppIcon-60@3x.png', size: 180 },
+            { name: 'AppIcon-76.png', size: 76 },
+            { name: 'AppIcon-76@2x.png', size: 152 },
+            { name: 'AppIcon-83.5@2x.png', size: 167 },
+            { name: 'AppIcon-512.png', size: 512 },
+            { name: 'AppIcon-512@2x.png', size: 1024 }
+        ];
+
+        function drawIcon(canvas, size) {
+            const ctx = canvas.getContext('2d');
+            canvas.width = size;
+            canvas.height = size;
+            
+            // Create gradient
+            const gradient = ctx.createLinearGradient(0, 0, size, size);
+            gradient.addColorStop(0, '#667eea');
+            gradient.addColorStop(1, '#764ba2');
+            
+            // Background with rounded corners
+            const cornerRadius = size * 0.176; // iOS corner radius ratio
+            ctx.fillStyle = gradient;
+            roundRect(ctx, 0, 0, size, size, cornerRadius);
+            ctx.fill();
+            
+            // Scale factors
+            const scale = size / 1024;
+            
+            // Kanban columns
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+            roundRect(ctx, 200 * scale, 200 * scale, 150 * scale, 624 * scale, 50 * scale);
+            ctx.fill();
+            
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+            roundRect(ctx, 387 * scale, 200 * scale, 150 * scale, 624 * scale, 50 * scale);
+            ctx.fill();
+            
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+            roundRect(ctx, 574 * scale, 200 * scale, 150 * scale, 624 * scale, 50 * scale);
+            ctx.fill();
+            
+            // Task cards
+            ctx.fillStyle = '#4a5568';
+            
+            // First column cards
+            roundRect(ctx, 225 * scale, 250 * scale, 100 * scale, 80 * scale, 25 * scale);
+            ctx.fill();
+            roundRect(ctx, 225 * scale, 360 * scale, 100 * scale, 80 * scale, 25 * scale);
+            ctx.fill();
+            roundRect(ctx, 225 * scale, 470 * scale, 100 * scale, 80 * scale, 25 * scale);
+            ctx.fill();
+            
+            // Second column cards
+            roundRect(ctx, 412 * scale, 300 * scale, 100 * scale, 80 * scale, 25 * scale);
+            ctx.fill();
+            roundRect(ctx, 412 * scale, 410 * scale, 100 * scale, 80 * scale, 25 * scale);
+            ctx.fill();
+            
+            // Third column cards
+            roundRect(ctx, 599 * scale, 350 * scale, 100 * scale, 80 * scale, 25 * scale);
+            ctx.fill();
+            roundRect(ctx, 599 * scale, 460 * scale, 100 * scale, 80 * scale, 25 * scale);
+            ctx.fill();
+            roundRect(ctx, 599 * scale, 570 * scale, 100 * scale, 80 * scale, 25 * scale);
+            ctx.fill();
+            roundRect(ctx, 599 * scale, 680 * scale, 100 * scale, 80 * scale, 25 * scale);
+            ctx.fill();
+        }
+        
+        function roundRect(ctx, x, y, width, height, radius) {
+            ctx.beginPath();
+            ctx.moveTo(x + radius, y);
+            ctx.lineTo(x + width - radius, y);
+            ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+            ctx.lineTo(x + width, y + height - radius);
+            ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+            ctx.lineTo(x + radius, y + height);
+            ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+            ctx.lineTo(x, y + radius);
+            ctx.quadraticCurveTo(x, y, x + radius, y);
+            ctx.closePath();
+        }
+        
+        function downloadCanvas(canvas, filename) {
+            const link = document.createElement('a');
+            link.download = filename;
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        }
+        
+        function generateIcons() {
+            const grid = document.getElementById('iconGrid');
+            grid.innerHTML = '';
+            
+            iconSizes.forEach(icon => {
+                const item = document.createElement('div');
+                item.className = 'icon-item';
+                
+                const canvas = document.createElement('canvas');
+                drawIcon(canvas, icon.size);
+                
+                const label = document.createElement('div');
+                label.textContent = `${icon.size}×${icon.size}`;
+                label.style.fontSize = '12px';
+                label.style.fontWeight = 'bold';
+                label.style.marginBottom = '4px';
+                
+                const filename = document.createElement('div');
+                filename.textContent = icon.name;
+                filename.style.fontSize = '10px';
+                filename.style.color = '#666';
+                filename.style.marginBottom = '8px';
+                
+                const button = document.createElement('button');
+                button.textContent = 'Download';
+                button.className = 'download-btn';
+                button.onclick = () => downloadCanvas(canvas, icon.name);
+                
+                item.appendChild(label);
+                item.appendChild(filename);
+                item.appendChild(canvas);
+                item.appendChild(button);
+                
+                grid.appendChild(item);
+            });
+        }
+        
+        // Generate preview
+        window.onload = function() {
+            const preview = document.getElementById('preview');
+            drawIcon(preview, 200);
+        };
+    </script>
+</body>
+</html>

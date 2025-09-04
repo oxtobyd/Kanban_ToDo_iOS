@@ -23,6 +23,14 @@ class TodoApp {
     }
 
     async init() {
+        console.log('TodoApp initializing...');
+        
+        // Check if import/export buttons exist
+        const exportBtn = document.querySelector('.export-btn');
+        const importBtn = document.querySelector('.import-btn');
+        console.log('Export button found:', !!exportBtn);
+        console.log('Import button found:', !!importBtn);
+        
         await this.loadTags();
         await this.loadTasks();
         this.setupEventListeners();
@@ -30,6 +38,8 @@ class TodoApp {
         this.setupTouchGestures();
         this.setupTagsInput();
         this.syncUIState();
+        
+        console.log('TodoApp initialized successfully');
     }
 
     async loadTasks(priority = null, sortBy = null, search = null, tag = null) {
@@ -1132,6 +1142,342 @@ class TodoApp {
         } catch (error) {
             console.error('Error deleting subtask:', error);
         }
+    }
+
+    // Import/Export methods
+    async exportData() {
+        try {
+            let exportData;
+            
+            if (window.dataService) {
+                // Client-side export (Capacitor/localStorage)
+                exportData = await window.dataService.exportData();
+            } else {
+                // Server-side export
+                const response = await fetch('/api/export');
+                if (!response.ok) {
+                    throw new Error('Failed to export data');
+                }
+                exportData = await response.json();
+            }
+            
+            // Create and download file
+            const blob = new Blob([JSON.stringify(exportData, null, 2)], { 
+                type: 'application/json' 
+            });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `kanban-export-${new Date().toISOString().split('T')[0]}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            this.showNotification('Data exported successfully!', 'success');
+        } catch (error) {
+            console.error('Export error:', error);
+            this.showNotification('Failed to export data: ' + error.message, 'error');
+        }
+    }
+
+    openImportModal() {
+        const modal = document.getElementById('importModal');
+        modal.style.display = 'block';
+        this.setupFileUpload();
+    }
+
+    closeImportModal() {
+        const modal = document.getElementById('importModal');
+        modal.style.display = 'none';
+        this.resetImportForm();
+    }
+
+    setupFileUpload() {
+        const fileUploadArea = document.getElementById('fileUploadArea');
+        const fileInput = document.getElementById('importFile');
+        
+        // Remove existing listeners to avoid duplicates
+        const newFileUploadArea = fileUploadArea.cloneNode(true);
+        fileUploadArea.parentNode.replaceChild(newFileUploadArea, fileUploadArea);
+        
+        // Click to select file
+        newFileUploadArea.addEventListener('click', () => {
+            fileInput.click();
+        });
+        
+        // File selection
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                this.handleFileSelection(e.target.files[0]);
+            }
+        });
+        
+        // Drag and drop
+        newFileUploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            newFileUploadArea.classList.add('drag-over');
+        });
+        
+        newFileUploadArea.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            newFileUploadArea.classList.remove('drag-over');
+        });
+        
+        newFileUploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            newFileUploadArea.classList.remove('drag-over');
+            
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                this.handleFileSelection(files[0]);
+            }
+        });
+    }
+
+    async handleFileSelection(file) {
+        if (!file.name.toLowerCase().endsWith('.json')) {
+            this.showNotification('Please select a JSON file', 'error');
+            return;
+        }
+        
+        try {
+            const text = await file.text();
+            const data = JSON.parse(text);
+            
+            // Validate file format - support both PostgreSQL and iOS formats
+            const hasPostgresFormat = data.database && data.database.tasks;
+            const hasIOSFormat = data.data && data.data.tasks;
+            
+            if (!hasPostgresFormat && !hasIOSFormat) {
+                throw new Error('Invalid file format. Expected PostgreSQL or iOS export format.');
+            }
+            
+            // Show selected file
+            this.showSelectedFile(file.name);
+            
+            // Show preview
+            this.showImportPreview(data);
+            
+            // Store data for import
+            this.importData = data;
+            
+            // Enable import button
+            document.getElementById('importBtn').disabled = false;
+            
+        } catch (error) {
+            console.error('File parsing error:', error);
+            this.showNotification('Invalid JSON file or format', 'error');
+        }
+    }
+
+    showSelectedFile(fileName) {
+        const selectedFile = document.getElementById('selectedFile');
+        const fileNameSpan = selectedFile.querySelector('.file-name');
+        
+        fileNameSpan.textContent = fileName;
+        selectedFile.style.display = 'block';
+        
+        document.getElementById('fileUploadArea').style.display = 'none';
+    }
+
+    removeSelectedFile() {
+        document.getElementById('selectedFile').style.display = 'none';
+        document.getElementById('fileUploadArea').style.display = 'block';
+        document.getElementById('importPreview').style.display = 'none';
+        document.getElementById('importBtn').disabled = true;
+        document.getElementById('importFile').value = '';
+        this.importData = null;
+    }
+
+    showImportPreview(data) {
+        const preview = document.getElementById('importPreview');
+        
+        // Support both formats
+        let tasksCount, notesCount, subtasksCount;
+        
+        if (data.database) {
+            // PostgreSQL format
+            tasksCount = data.database.tasks ? data.database.tasks.length : 0;
+            notesCount = data.database.notes ? data.database.notes.length : 0;
+            subtasksCount = data.database.subTasks ? data.database.subTasks.length : 0;
+        } else if (data.data) {
+            // iOS format
+            tasksCount = data.data.tasks ? data.data.tasks.length : 0;
+            notesCount = data.data.notes ? data.data.notes.length : 0;
+            subtasksCount = data.data.subtasks ? data.data.subtasks.length : 0;
+        } else {
+            tasksCount = notesCount = subtasksCount = 0;
+        }
+        
+        document.getElementById('previewTasks').textContent = tasksCount;
+        document.getElementById('previewNotes').textContent = notesCount;
+        document.getElementById('previewSubtasks').textContent = subtasksCount;
+        
+        preview.style.display = 'block';
+    }
+
+    async performImport() {
+        if (!this.importData) {
+            this.showNotification('No file selected', 'error');
+            return;
+        }
+        
+        const clearExisting = document.getElementById('clearExisting').checked;
+        const importBtn = document.getElementById('importBtn');
+        
+        try {
+            importBtn.disabled = true;
+            importBtn.textContent = 'Importing...';
+            
+            let result;
+            
+            if (window.dataService) {
+                // Client-side import (Capacitor/localStorage)
+                result = await window.dataService.importData(this.importData, { clearExisting });
+            } else {
+                // Server-side import
+                const response = await fetch('/api/import', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        data: this.importData.data,
+                        options: { clearExisting }
+                    }),
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to import data');
+                }
+                
+                result = await response.json();
+            }
+            
+            // Show success message with stats
+            this.showImportResult(result);
+            
+            // Reload tasks
+            await this.loadTasks();
+            
+            // Close modal after a delay
+            setTimeout(() => {
+                this.closeImportModal();
+            }, 3000);
+            
+        } catch (error) {
+            console.error('Import error:', error);
+            this.showNotification('Failed to import data: ' + error.message, 'error');
+        } finally {
+            importBtn.disabled = false;
+            importBtn.textContent = 'Import Data';
+        }
+    }
+
+    showImportResult(result) {
+        const container = document.querySelector('.import-container');
+        const existingMessage = container.querySelector('.import-message');
+        
+        if (existingMessage) {
+            existingMessage.remove();
+        }
+        
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `import-message ${result.success ? 'success' : 'error'}`;
+        
+        if (result.success) {
+            messageDiv.innerHTML = `
+                <div>${result.message}</div>
+                <div class="import-stats">
+                    <h5>Import Statistics:</h5>
+                    <div class="stats-grid">
+                        <div class="stat-row">
+                            <span>Tasks:</span>
+                            <span>${result.stats.tasks.imported} imported, ${result.stats.tasks.errors} errors</span>
+                        </div>
+                        <div class="stat-row">
+                            <span>Notes:</span>
+                            <span>${result.stats.notes.imported} imported, ${result.stats.notes.errors} errors</span>
+                        </div>
+                        <div class="stat-row">
+                            <span>Subtasks:</span>
+                            <span>${result.stats.subtasks.imported} imported, ${result.stats.subtasks.errors} errors</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        } else {
+            messageDiv.textContent = result.message || 'Import failed';
+        }
+        
+        container.insertBefore(messageDiv, container.firstChild);
+    }
+
+    resetImportForm() {
+        document.getElementById('clearExisting').checked = false;
+        document.getElementById('importFile').value = '';
+        document.getElementById('selectedFile').style.display = 'none';
+        document.getElementById('fileUploadArea').style.display = 'block';
+        document.getElementById('importPreview').style.display = 'none';
+        document.getElementById('importBtn').disabled = true;
+        
+        const existingMessage = document.querySelector('.import-message');
+        if (existingMessage) {
+            existingMessage.remove();
+        }
+        
+        this.importData = null;
+    }
+
+    showNotification(message, type = 'info') {
+        // Create notification element
+        const notification = document.createElement('div');
+        notification.className = `notification notification-${type}`;
+        notification.textContent = message;
+        
+        // Style the notification
+        Object.assign(notification.style, {
+            position: 'fixed',
+            top: '20px',
+            right: '20px',
+            padding: '12px 20px',
+            borderRadius: '8px',
+            color: 'white',
+            fontWeight: '500',
+            zIndex: '10000',
+            maxWidth: '300px',
+            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+            transform: 'translateX(100%)',
+            transition: 'transform 0.3s ease'
+        });
+        
+        // Set background color based on type
+        const colors = {
+            success: '#10b981',
+            error: '#ef4444',
+            info: '#3b82f6',
+            warning: '#f59e0b'
+        };
+        notification.style.backgroundColor = colors[type] || colors.info;
+        
+        // Add to page
+        document.body.appendChild(notification);
+        
+        // Animate in
+        setTimeout(() => {
+            notification.style.transform = 'translateX(0)';
+        }, 100);
+        
+        // Remove after delay
+        setTimeout(() => {
+            notification.style.transform = 'translateX(100%)';
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.parentNode.removeChild(notification);
+                }
+            }, 300);
+        }, 4000);
     }
 }
 

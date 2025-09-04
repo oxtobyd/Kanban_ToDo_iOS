@@ -1,0 +1,49 @@
+{
+  "version": "1.0",
+  "exported_at": "2025-01-09T10:30:00.000Z",
+  "app_name": "Kanban Todo Board",
+  "data": {
+    "tasks": [
+      {
+        "id": 1,
+        "title": "Test Task from iOS",
+        "description": "This is a test task exported from iOS version",
+        "status": "todo",
+        "priority": "high",
+        "tags": ["test", "ios"],
+        "pending_on": null,
+        "created_at": "2025-01-09T10:00:00.000Z",
+        "updated_at": "2025-01-09T10:00:00.000Z"
+      },
+      {
+        "id": 2,
+        "title": "Another iOS Test Task",
+        "description": "Second test task from iOS",
+        "status": "done",
+        "priority": "low",
+        "tags": ["test"],
+        "pending_on": null,
+        "created_at": "2025-01-09T10:15:00.000Z",
+        "updated_at": "2025-01-09T10:15:00.000Z"
+      }
+    ],
+    "notes": [
+      {
+        "id": 1,
+        "task_id": 1,
+        "content": "This is a note for the iOS task",
+        "created_at": "2025-01-09T10:05:00.000Z"
+      }
+    ],
+    "subtasks": [
+      {
+        "id": 1,
+        "task_id": 1,
+        "title": "iOS subtask",
+        "completed": false,
+        "created_at": "2025-01-09T10:10:00.000Z",
+        "updated_at": "2025-01-09T10:10:00.000Z"
+      }
+    ]
+  }
+}

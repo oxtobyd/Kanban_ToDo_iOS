@@ -277,4 +277,218 @@ router.delete('/subtasks/:id', async (req, res) => {
   }
 });
 
+// Export data
+router.get('/export', async (req, res) => {
+  try {
+    // Get all tasks
+    const tasksResult = await pool.query('SELECT * FROM tasks ORDER BY created_at ASC');
+    const tasks = tasksResult.rows;
+    
+    // Get all notes
+    const notesResult = await pool.query('SELECT * FROM notes ORDER BY created_at ASC');
+    const notes = notesResult.rows;
+    
+    // Get all subtasks
+    const subtasksResult = await pool.query('SELECT * FROM sub_tasks ORDER BY created_at ASC');
+    const subtasks = subtasksResult.rows;
+    
+    // Get all unique tags
+    const tagsResult = await pool.query(
+      'SELECT DISTINCT unnest(tags) as tag FROM tasks WHERE tags IS NOT NULL AND array_length(tags, 1) > 0 ORDER BY tag'
+    );
+    
+    // Create export data in PostgreSQL format for compatibility
+    const exportData = {
+      exportDate: new Date().toISOString(),
+      version: "1.0",
+      database: {
+        tasks,
+        notes,
+        subTasks: subtasks,
+        tags: tagsResult.rows.map(row => row.tag)
+      },
+      metadata: {
+        totalTasks: tasks.length,
+        totalNotes: notes.length,
+        totalSubTasks: subtasks.length,
+        totalTags: tagsResult.rows.length
+      },
+      // Also include the iOS format for backward compatibility
+      data: {
+        tasks,
+        notes,
+        subtasks
+      },
+      exported_at: new Date().toISOString(),
+      app_name: "Kanban Todo Board"
+    };
+    
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', `attachment; filename="kanban-export-${new Date().toISOString().split('T')[0]}.json"`);
+    res.json(exportData);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Import data
+router.post('/import', async (req, res) => {
+  const client = await pool.connect();
+  
+  try {
+    await client.query('BEGIN');
+    
+    // Support both formats: { data: {...} } and { database: {...} }
+    const importBody = req.body;
+    let data, options = {};
+    
+    // Detect format and extract data
+    if (importBody.database) {
+      // PostgreSQL format
+      data = {
+        tasks: importBody.database.tasks || [],
+        notes: importBody.database.notes || [],
+        subtasks: importBody.database.subTasks || [] // Note: subTasks vs subtasks
+      };
+      options.clearExisting = importBody.clearExisting || false;
+    } else if (importBody.data) {
+      // iOS format
+      data = importBody.data;
+      options = importBody.options || {};
+    } else {
+      return res.status(400).json({ error: 'Invalid import data format. Expected "data" or "database" property.' });
+    }
+    
+    if (!data.tasks || !Array.isArray(data.tasks)) {
+      return res.status(400).json({ error: 'Invalid import data format. Expected tasks array.' });
+    }
+    
+    let importStats = {
+      tasks: { imported: 0, skipped: 0, errors: 0 },
+      notes: { imported: 0, skipped: 0, errors: 0 },
+      subtasks: { imported: 0, skipped: 0, errors: 0 }
+    };
+    
+    // Clear existing data if requested
+    if (options.clearExisting) {
+      await client.query('DELETE FROM sub_tasks');
+      await client.query('DELETE FROM notes');
+      await client.query('DELETE FROM tasks');
+      
+      // Reset sequences
+      await client.query('ALTER SEQUENCE tasks_id_seq RESTART WITH 1');
+      await client.query('ALTER SEQUENCE notes_id_seq RESTART WITH 1');
+      await client.query('ALTER SEQUENCE sub_tasks_id_seq RESTART WITH 1');
+    }
+    
+    // Create ID mapping for tasks (old ID -> new ID)
+    const taskIdMapping = {};
+    
+    // Import tasks
+    for (const task of data.tasks) {
+      try {
+        const result = await client.query(
+          'INSERT INTO tasks (title, description, priority, status, tags, pending_on, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id',
+          [
+            task.title,
+            task.description || '',
+            task.priority || 'medium',
+            task.status || 'todo',
+            task.tags || [],
+            task.pending_on || null,
+            task.created_at || new Date().toISOString(),
+            task.updated_at || new Date().toISOString()
+          ]
+        );
+        
+        taskIdMapping[task.id] = result.rows[0].id;
+        importStats.tasks.imported++;
+      } catch (error) {
+        console.error('Error importing task:', error);
+        importStats.tasks.errors++;
+      }
+    }
+    
+    // Import notes
+    if (data.notes && Array.isArray(data.notes)) {
+      for (const note of data.notes) {
+        try {
+          const newTaskId = taskIdMapping[note.task_id];
+          if (newTaskId) {
+            await client.query(
+              'INSERT INTO notes (task_id, content, created_at) VALUES ($1, $2, $3)',
+              [
+                newTaskId,
+                note.content,
+                note.created_at || new Date().toISOString()
+              ]
+            );
+            importStats.notes.imported++;
+          } else {
+            importStats.notes.skipped++;
+          }
+        } catch (error) {
+          console.error('Error importing note:', error);
+          importStats.notes.errors++;
+        }
+      }
+    }
+    
+    // Import subtasks (handle both subtasks and subTasks naming)
+    const subtasksData = data.subtasks || data.subTasks || [];
+    if (Array.isArray(subtasksData)) {
+      for (const subtask of subtasksData) {
+        try {
+          const newTaskId = taskIdMapping[subtask.task_id];
+          if (newTaskId) {
+            await client.query(
+              'INSERT INTO sub_tasks (task_id, title, completed, created_at, updated_at) VALUES ($1, $2, $3, $4, $5)',
+              [
+                newTaskId,
+                subtask.title,
+                subtask.completed || false,
+                subtask.created_at || new Date().toISOString(),
+                subtask.updated_at || new Date().toISOString()
+              ]
+            );
+            importStats.subtasks.imported++;
+          } else {
+            importStats.subtasks.skipped++;
+          }
+        } catch (error) {
+          console.error('Error importing subtask:', error);
+          importStats.subtasks.errors++;
+        }
+      }
+    }
+    
+    await client.query('COMMIT');
+    
+    // Return response in format compatible with both versions
+    const response = {
+      success: true,
+      message: 'Data imported successfully',
+      stats: importStats,
+      // Also include PostgreSQL format for compatibility
+      results: {
+        tasks: importStats.tasks,
+        notes: importStats.notes,
+        subTasks: importStats.subtasks
+      },
+      summary: {
+        totalImported: importStats.tasks.imported + importStats.notes.imported + importStats.subtasks.imported,
+        totalErrors: importStats.tasks.errors + importStats.notes.errors + importStats.subtasks.errors
+      }
+    };
+    
+    res.json(response);
+    
+  } catch (error) {
+    await client.query('ROLLBACK');
+    res.status(500).json({ error: error.message });
+  } finally {
+    client.release();
+  }
+});
+
 module.exports = router;

@@ -6,7 +6,10 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
-    "setup-db": "node scripts/setup-database.js"
+    "setup-db": "node scripts/setup-database.js",
+    "build": "node build-capacitor.js",
+    "cap:sync": "npm run build && npx cap sync",
+    "cap:ios": "npm run cap:sync && npx cap open ios"
   },
   "repository": {
     "type": "git",
@@ -31,10 +34,20 @@
     "url": "https://github.com/oxtobyd/Kanban_ToDo/issues"
   },
   "dependencies": {
-    "express": "^4.18.2",
-    "pg": "^8.11.3",
+    "@capacitor/app": "^7.0.2",
+    "@capacitor/cli": "^7.4.3",
+    "@capacitor/core": "^7.4.3",
+    "@capacitor/file-viewer": "^1.0.4",
+    "@capacitor/filesystem": "^7.1.4",
+    "@capacitor/ios": "^7.4.3",
+    "@capacitor/preferences": "^7.0.2",
+    "@capacitor/share": "^7.0.2",
+    "@capawesome-team/capacitor-file-opener": "^7.0.1",
+    "@serebano/capacitor-icloud-preferences": "^0.1.1",
     "cors": "^2.8.5",
-    "dotenv": "^16.3.1"
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "pg": "^8.11.3"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"
