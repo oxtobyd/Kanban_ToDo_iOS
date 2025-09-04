@@ -10,6 +10,7 @@ class TodoApp {
         this.availableTags = [];
         this.searchTimeout = null;
         this.editingNoteId = null;
+        this.columnStates = this.loadColumnStates();
         this.pendingTaskId = null;
         // Touch gesture properties
         this.touchStartX = 0;
@@ -50,6 +51,7 @@ class TodoApp {
         this.setupTouchGestures();
         this.setupTagsInput();
         this.setupFileDragAndDrop();
+        this.applyColumnStates();
         this.syncUIState();
         this.setupMobileUI();
         // Inject a style to disable text selection while dragging
@@ -559,6 +561,14 @@ class TodoApp {
                 this.closePendingReasonModal();
             }
         });
+
+        // Setup collapse/expand toggle listeners
+        document.querySelectorAll('.collapse-toggle').forEach(button => {
+            button.addEventListener('click', (e) => {
+                const status = e.target.closest('.collapse-toggle').dataset.status;
+                this.toggleColumnCollapse(status);
+            });
+        });
     }
 
     togglePendingReason(status) {
@@ -569,6 +579,60 @@ class TodoApp {
             pendingReasonGroup.style.display = 'none';
             document.getElementById('pendingReason').value = '';
         }
+    }
+
+    // Column collapse/expand functionality
+    loadColumnStates() {
+        try {
+            const saved = localStorage.getItem('kanban-column-states');
+            return saved ? JSON.parse(saved) : {
+                todo: false,
+                in_progress: false,
+                pending: false,
+                done: false
+            };
+        } catch (error) {
+            console.error('Error loading column states:', error);
+            return {
+                todo: false,
+                in_progress: false,
+                pending: false,
+                done: false
+            };
+        }
+    }
+
+    saveColumnStates() {
+        try {
+            localStorage.setItem('kanban-column-states', JSON.stringify(this.columnStates));
+        } catch (error) {
+            console.error('Error saving column states:', error);
+        }
+    }
+
+    toggleColumnCollapse(status) {
+        this.columnStates[status] = !this.columnStates[status];
+        this.updateColumnCollapseState(status);
+        this.saveColumnStates();
+    }
+
+    updateColumnCollapseState(status) {
+        const column = document.querySelector(`[data-status="${status}"]`);
+        const toggleButton = document.querySelector(`[data-status="${status}"].collapse-toggle`);
+        
+        if (this.columnStates[status]) {
+            column.classList.add('collapsed');
+            toggleButton.classList.add('collapsed');
+        } else {
+            column.classList.remove('collapsed');
+            toggleButton.classList.remove('collapsed');
+        }
+    }
+
+    applyColumnStates() {
+        Object.keys(this.columnStates).forEach(status => {
+            this.updateColumnCollapseState(status);
+        });
     }
 
     setupDragAndDrop() {
