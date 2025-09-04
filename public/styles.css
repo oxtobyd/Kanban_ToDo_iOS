@@ -148,14 +148,14 @@ body {
 
 .kanban-board {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    grid-template-columns: repeat(4, 1fr);
     gap: 20px;
 }
 
 /* iPad and tablet specific styles */
 @media (min-width: 768px) and (max-width: 1023px) {
     .kanban-board {
-        grid-template-columns: repeat(4, 1fr);
+        grid-template-columns: 1fr 1fr 1fr 1fr; /* Explicit equal columns */
         gap: 10px;
         width: 100%;
         overflow-x: hidden;
@@ -166,6 +166,7 @@ body {
         min-width: 0; /* Allow columns to shrink */
         max-width: 100%;
         overflow: hidden;
+        flex: 1; /* Ensure equal distribution */
     }
     
     .app {
@@ -230,6 +231,9 @@ body {
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
     backdrop-filter: blur(10px);
     min-height: 500px;
+    width: 100%;
+    max-width: 100%;
+    overflow: hidden;
 }
 
 .column-header {
