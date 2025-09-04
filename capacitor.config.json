@@ -1,6 +1,6 @@
 {
   "appId": "com.fynesystems.kanbantodo",
-  "appName": "Kanban Todo",
+  "appName": "ToDo Kanban",
   "webDir": "www",
   "server": {
     "androidScheme": "https"
@@ -11,7 +11,7 @@
     }
   },
   "ios": {
-    "scheme": "Kanban Todo",
+    "scheme": "ToDo Kanban",
     "backgroundColor": "#667eea",
     "icloud": {
       "container": "iCloud.com.fynesystems.kanbantodo",
