@@ -1,6 +1,6 @@
-# Kanban Todo - iOS App Setup
+# ToDo Kanban - iOS App Setup
 
-This guide will help you set up the Kanban Todo app as a native iOS/macOS application with iCloud sync.
+This guide will help you set up the ToDo Kanban app as a native iOS/macOS application with automatic iCloud sync.
 
 ## Prerequisites
 
@@ -37,24 +37,26 @@ npx cap open ios
 5. **Configure iCloud**:
    - Check "CloudKit"
    - Check "CloudDocuments" 
-   - Add container: `iCloud.com.yourcompany.kanbantodo`
+   - Add container: `iCloud.com.fynesystems.kanbantodo`
 
-6. **Update Bundle Identifier**:
-   - Change `com.yourcompany.kanbantodo` to your actual bundle ID
+6. **Update Bundle Identifier** (if needed):
+   - Current: `com.fynesystems.kanbantodo`
+   - Change to your actual bundle ID if needed
    - Make sure it matches your Apple Developer Account
 
 ### 5. Update App Configuration
 
-1. **Update capacitor.config.json**:
+1. **Current capacitor.config.json** (already configured):
    ```json
    {
-     "appId": "your.actual.bundle.id",
-     "appName": "Kanban Todo"
+     "appId": "com.fynesystems.kanbantodo",
+     "appName": "ToDo Kanban"
    }
    ```
 
-2. **Update entitlements file** (`ios/App/App/App.entitlements`):
-   - Replace `com.yourcompany.kanbantodo` with your bundle ID
+2. **Current entitlements file** (`ios/App/App/App.entitlements`):
+   - Already configured with `com.fynesystems.kanbantodo`
+   - Update only if you need a different bundle ID
 
 ### 6. Build and Run
 
@@ -65,19 +67,24 @@ npx cap open ios
 
 ### ✅ What Works
 - **Native iOS/macOS app** with full touch gestures
-- **iCloud sync** - data syncs across all your Apple devices
+- **Automatic iCloud sync** - data syncs across all your Apple devices
 - **Offline-first** - works without internet, syncs when connected
 - **Drag & drop** task management
 - **Swipe gestures** to move tasks between columns
 - **Priority management** with visual indicators
 - **Tags and filtering**
-- **Notes and subtasks**
+- **Notes and subtasks** with file attachments
+- **File attachments** - drag files into notes and subtasks
+- **Clickable URLs** - automatic detection in task content
 - **Search functionality**
+- **Export/Import** - backup and restore your data
 
 ### 🔄 Data Storage
-- Uses **Capacitor Preferences** which automatically syncs with iCloud
+- Uses **iCloud Key-Value Store** for automatic cross-device sync
+- **File attachments** stored in iCloud Documents for larger files
 - Data is stored locally and synced across devices signed into the same Apple ID
 - No external server required - everything is stored in your personal iCloud
+- **Conflict resolution** with timestamp-based last-write-wins
 
 ### 📱 Platform Support
 - **iPhone** - Optimized for mobile with touch gestures
@@ -106,12 +113,13 @@ npm run dev
 Replace the icon files in `ios/App/App/Assets.xcassets/AppIcon.appiconset/`
 
 ### App Name
-Update in `capacitor.config.json` and rebuild
+Currently set to "ToDo Kanban" in `capacitor.config.json` and `Info.plist`
 
 ### Bundle ID
-1. Update in `capacitor.config.json`
-2. Update in Xcode project settings
-3. Update in `App.entitlements`
+Currently set to `com.fynesystems.kanbantodo`:
+1. Update in `capacitor.config.json` if needed
+2. Update in Xcode project settings if needed
+3. Update in `App.entitlements` if needed
 4. Sync with `npm run cap:sync`
 
 ## Troubleshooting

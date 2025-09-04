@@ -1,17 +1,64 @@
-# Docker Setup for Todo Kanban Board
+# Legacy Docker Setup (Deprecated)
 
-## Development Setup (Hot Reload)
+> **Note**: This app has been converted to a native iOS/macOS app with iCloud sync. The Docker setup below is for reference only and is no longer actively maintained.
 
-### Prerequisites
-- Docker and Docker Compose installed
-- Port 3012 and 5432 available
+## Previous Web Version (PostgreSQL-based)
 
-### Quick Start
+This documentation refers to the previous web-based version that used PostgreSQL and Docker. The current version is a native iOS/macOS app with iCloud sync.
 
-**Option 1: With Docker PostgreSQL (Port 5433)**
+### What Changed
+- **Storage**: PostgreSQL → iCloud Key-Value Store + iCloud Documents
+- **Platform**: Web app → Native iOS/macOS app
+- **Sync**: Manual → Automatic iCloud sync
+- **Deployment**: Docker containers → App Store distribution
+
+### Current Architecture
+- **Frontend**: Native iOS/macOS app built with Capacitor
+- **Storage**: iCloud Key-Value Store for data, iCloud Documents for files
+- **Sync**: Automatic across all Apple devices
+- **No servers required**: Everything runs locally and syncs via iCloud
+
+## For Current iOS App Development
+
+If you need to work on the web version for development:
+
 ```bash
-# Start development environment with Docker PostgreSQL
+# Install dependencies
+npm install
+
+# Run development server (web only)
+npm run dev
+
+# Build for iOS
+npm run cap:sync
+
+# Open in Xcode
+npx cap open ios
+```
+
+## Migration Notes
+
+### Data Migration
+If you have data from the PostgreSQL version:
+1. Export your data using the web interface
+2. Import it into the iOS app using the import feature
+3. Data will automatically sync to iCloud
+
+### Development Workflow
+1. Make changes to `public/script-capacitor.js` and `public/styles.css`
+2. Run `npm run cap:sync` to update the iOS project
+3. Build and test in Xcode
+
+## Legacy Docker Commands (Reference Only)
+
+The following commands were used in the previous PostgreSQL-based version:
+
+```bash
+# Start with Docker PostgreSQL
 docker-compose up -d
+
+# Start with local PostgreSQL
+docker-compose -f docker-compose.local-db.yml up -d
 
 # View logs
 docker-compose logs -f todo-app
@@ -20,152 +67,18 @@ docker-compose logs -f todo-app
 docker-compose down
 ```
 
-**Option 2: Use Your Existing PostgreSQL (Recommended for your setup)**
-```bash
-# First, setup the database using your existing PostgreSQL
-npm run setup-db
+## Current iOS App Troubleshooting
 
-# Then start only the app container
-docker-compose -f docker-compose.local-db.yml up -d
+For the current iOS app, see the main README.md and README-iOS.md files for troubleshooting guidance.
 
-# View logs
-docker-compose -f docker-compose.local-db.yml logs -f todo-app
+### Common iOS Issues
+- **iCloud sync problems**: Check Apple ID sign-in and iCloud Drive settings
+- **Build errors**: Clean Xcode build folder and sync with `npm run cap:sync`
+- **File attachments**: Ensure proper permissions and iCloud Documents sync
 
-# Stop services
-docker-compose -f docker-compose.local-db.yml down
-```
+## Legacy Environment Variables (Reference)
 
-### Access Points
-- **Local**: http://localhost:3012
-- **Network**: http://[YOUR_LOCAL_IP]:3012
-- **Database (Docker)**: localhost:5433
-- **Database (Local)**: localhost:5432
-
-### Development Features
-- ✅ Hot reload - changes reflect immediately
-- ✅ PostgreSQL database included
-- ✅ Sample data pre-loaded
-- ✅ Network accessible
-- ✅ Mobile-friendly UI
-
-## Production Setup
-
-```bash
-# Build and start production environment
-docker-compose -f docker-compose.prod.yml up -d
-
-# Or build manually
-docker build -f Dockerfile.prod -t todo-app-prod .
-docker run -p 3012:3012 todo-app-prod
-```
-
-## Network Access
-
-### Find Your Local IP
-```bash
-# macOS/Linux
-ifconfig | grep "inet " | grep -v 127.0.0.1
-
-# Windows
-ipconfig | findstr "IPv4"
-```
-
-### Access from Mobile/Other Devices
-1. Connect devices to same WiFi network
-2. Use your computer's local IP: `http://192.168.1.XXX:3012`
-
-## Cloudflare Tunnel Setup
-
-### Install Cloudflare Tunnel
-```bash
-# macOS
-brew install cloudflared
-
-# Linux
-wget https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
-sudo dpkg -i cloudflared-linux-amd64.deb
-```
-
-### Create Tunnel
-```bash
-# Login to Cloudflare
-cloudflared tunnel login
-
-# Create tunnel
-cloudflared tunnel create todo-app
-
-# Configure tunnel (create config.yml)
-cloudflared tunnel route dns todo-app your-domain.com
-
-# Run tunnel
-cloudflared tunnel run todo-app
-```
-
-### Sample config.yml
-```yaml
-tunnel: YOUR_TUNNEL_ID
-credentials-file: /path/to/credentials.json
-
-ingress:
-  - hostname: your-domain.com
-    service: http://localhost:3012
-  - service: http_status:404
-```
-
-## Troubleshooting
-
-### Container Issues
-```bash
-# Rebuild containers
-docker-compose down
-docker-compose build --no-cache
-docker-compose up -d
-
-# Check container status
-docker-compose ps
-
-# View specific service logs
-docker-compose logs todo-app
-docker-compose logs postgres
-```
-
-### Database Issues
-
-**Docker PostgreSQL:**
-```bash
-# Reset database
-docker-compose down -v
-docker-compose up -d
-
-# Connect to database
-docker-compose exec postgres psql -U postgres -d todo_app
-```
-
-**Local PostgreSQL:**
-```bash
-# Connect to your local database
-psql -U postgres -d todo_app
-
-# Reset database manually
-npm run setup-db
-```
-
-### Network Issues
-```bash
-# Check if ports are available
-lsof -i :3012
-lsof -i :5432
-
-# Test local access
-curl http://localhost:3012
-
-# Test network access (replace with your actual IP)
-curl http://192.168.1.100:3012
-```
-
-## Environment Variables
-
-Create `.env.docker` for custom settings:
+The previous PostgreSQL version used these environment variables:
 ```env
 PORT=3012
 DB_HOST=postgres
@@ -175,21 +88,12 @@ DB_USER=postgres
 DB_PASSWORD=your_secure_password
 ```
 
-## Mobile Optimization
+## Migration Benefits
 
-The app includes:
-- ✅ Responsive design for all screen sizes
-- ✅ Touch-friendly buttons (44px minimum)
-- ✅ Prevents zoom on form inputs (iOS)
-- ✅ Optimized drag and drop for mobile
-- ✅ Progressive Web App features
-- ✅ Fast loading and smooth animations
-
-## Security Notes
-
-For production:
-- Change default database password
-- Use environment variables for secrets
-- Enable HTTPS with Cloudflare
-- Consider adding authentication
-- Regularly update dependencies
+The move from PostgreSQL/Docker to iCloud provides:
+- ✅ **No server maintenance** - Apple handles all infrastructure
+- ✅ **Automatic sync** - Works across all Apple devices instantly
+- ✅ **Better security** - Apple's encryption and privacy protection
+- ✅ **Offline support** - Works without internet connection
+- ✅ **Native performance** - Full iOS/macOS integration
+- ✅ **App Store distribution** - Easy updates and installation

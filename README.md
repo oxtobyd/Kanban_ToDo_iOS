@@ -1,8 +1,8 @@
-# Kanban Todo Board
+# ToDo Kanban - iOS App
 
-A modern, responsive Kanban-style todo application built with Node.js, Express, PostgreSQL, and vanilla JavaScript. Features drag-and-drop functionality, mobile touch gestures, task prioritization, tagging system, and a pending workflow with reason tracking.
+A modern, native iOS/macOS Kanban-style todo application built with Capacitor and vanilla JavaScript. Features drag-and-drop functionality, mobile touch gestures, task prioritization, tagging system, and automatic iCloud sync across all your Apple devices.
 
-![Kanban Todo Board](https://img.shields.io/badge/Status-Active-green) ![Node.js](https://img.shields.io/badge/Node.js-18+-green) ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-13+-blue)
+![ToDo Kanban](https://img.shields.io/badge/Status-Active-green) ![iOS](https://img.shields.io/badge/iOS-14+-blue) ![macOS](https://img.shields.io/badge/macOS-11+-blue) ![iCloud](https://img.shields.io/badge/iCloud-Sync-green)
 
 ## 📸 Screenshot
 
@@ -27,9 +27,12 @@ A modern, responsive Kanban-style todo application built with Node.js, Express, 
 
 ### 📝 Advanced Features
 - **Pending Workflow**: Special pending column with required reason tracking
-- **Notes System**: Add, edit, and delete notes on individual tasks
+- **Notes System**: Add, edit, and delete notes on individual tasks with file attachments
+- **Subtasks**: Create and manage subtasks for complex task breakdown
+- **File Attachments**: Drag and drop files into notes and subtasks
+- **Clickable URLs**: Automatic detection and linking of URLs in task content
 - **Status Management**: Set task status directly when creating/editing
-- **Responsive Design**: Works seamlessly on desktop, tablet, and mobile
+- **Responsive Design**: Works seamlessly on iPhone, iPad, and Mac
 
 ### 🎨 User Experience
 - **Modern UI**: Clean, professional design with smooth animations
@@ -40,16 +43,17 @@ A modern, responsive Kanban-style todo application built with Node.js, Express, 
 ## 🚀 Quick Start
 
 ### Prerequisites
-- Node.js 18+ 
-- PostgreSQL 13+
-- npm or yarn
+- macOS with Xcode 14+
+- Apple Developer Account (for device testing and App Store)
+- Node.js 18+ and npm
+- iOS 14+ or macOS 11+ for target devices
 
 ### Installation
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/oxtobyd/Kanban_ToDo.git
-   cd Kanban_ToDo
+   git clone https://github.com/oxtobyd/Kanban_ToDo_iOS.git
+   cd Kanban_ToDo_iOS
    ```
 
 2. **Install dependencies**
@@ -57,63 +61,39 @@ A modern, responsive Kanban-style todo application built with Node.js, Express, 
    npm install
    ```
 
-3. **Set up environment variables**
+3. **Build for iOS**
    ```bash
-   cp .env.example .env
-   ```
-   
-   Edit `.env` with your database credentials:
-   ```env
-   PORT=3012
-   DB_HOST=localhost
-   DB_PORT=5432
-   DB_NAME=todo_app
-   DB_USER=your_postgres_username
-   DB_PASSWORD=your_postgres_password
+   npm run cap:sync
    ```
 
-4. **Set up PostgreSQL database**
-   
-   Create the database and user:
-   ```sql
-   -- Connect to PostgreSQL as superuser
-   sudo -u postgres psql
-   
-   -- Create database and user
-   CREATE DATABASE todo_app;
-   CREATE USER your_username WITH PASSWORD 'your_password';
-   GRANT ALL PRIVILEGES ON DATABASE todo_app TO your_username;
-   \q
-   ```
-
-5. **Initialize the database**
+4. **Open in Xcode**
    ```bash
-   node scripts/setup-database.js
+   npx cap open ios
    ```
 
-6. **Start the application**
-   ```bash
-   npm start
-   ```
+5. **Configure in Xcode**
+   - Select your development team
+   - Update bundle identifier if needed
+   - Build and run on device or simulator
 
-7. **Open your browser**
-   Navigate to `http://localhost:3012`
+### iCloud Setup (Automatic)
+- **No configuration needed** - iCloud sync works automatically
+- Data syncs across all devices signed into the same Apple ID
+- Works offline and syncs when connected
 
-## 🐳 Docker Setup
+## 📱 Platform Support
 
-For a containerized setup with Docker:
+### iOS (iPhone/iPad)
+- **Native app** with full touch gestures and haptic feedback
+- **Optimized UI** for mobile screens with collapsible columns
+- **Swipe gestures** to move tasks between columns
+- **File attachments** via drag and drop or file picker
 
-### Option 1: With Docker PostgreSQL
-```bash
-docker-compose up -d
-```
-
-### Option 2: With Local PostgreSQL
-```bash
-docker-compose -f docker-compose.local-db.yml up -d
-```
-
-The application will be available at `http://localhost:3012`
+### macOS (Mac Catalyst)
+- **Native Mac app** with full keyboard shortcuts
+- **Drag and drop** from Finder for file attachments
+- **Window management** with proper Mac UI patterns
+- **Menu bar integration** and standard Mac behaviors
 
 ## 📱 Usage Guide
 
@@ -131,7 +111,9 @@ The application will be available at `http://localhost:3012`
 ### Task Management
 - **Edit**: Click the edit icon on any task
 - **Delete**: Click the delete icon (with confirmation)
-- **Notes**: Click the notes icon to add/edit task notes
+- **Notes**: Click the notes icon to add/edit task notes with file attachments
+- **Subtasks**: Add and manage subtasks for complex task breakdown
+- **File Attachments**: Drag files into notes or subtasks for easy reference
 
 ### Filtering & Search
 - Use the search box for real-time filtering
@@ -142,43 +124,41 @@ The application will be available at `http://localhost:3012`
 ## 🏗️ Project Structure
 
 ```
-Kanban_ToDo/
-├── config/
-│   └── database.js          # Database connection configuration
+Kanban_ToDo_iOS/
 ├── public/
-│   ├── index.html          # Main HTML file
-│   ├── script.js           # Frontend JavaScript
-│   ├── styles.css          # CSS styles
-│   ├── logo.svg            # Application logo
-│   └── favicon.svg         # Favicon
-├── routes/
-│   └── tasks.js            # API routes for tasks and notes
-├── scripts/
-│   └── setup-database.js   # Database initialization script
-├── docker-compose.yml      # Docker configuration
-├── Dockerfile             # Docker image definition
-├── init-db.sql           # SQL schema for Docker setup
-├── server.js             # Express server
-└── package.json          # Node.js dependencies
+│   ├── index-capacitor.html    # Main HTML for iOS app
+│   ├── script-capacitor.js     # Frontend JavaScript with iOS features
+│   ├── data-service.js         # iCloud sync and data management
+│   ├── icloud-sync-proper.js   # iCloud Key-Value Store sync
+│   ├── styles.css              # CSS styles
+│   └── logo.svg                # Application logo
+├── ios/
+│   └── App/                    # iOS Xcode project
+│       ├── App.xcodeproj/      # Xcode project file
+│       ├── App/                # iOS app source
+│       │   ├── AppDelegate.swift
+│       │   ├── Info.plist      # App configuration
+│       │   ├── App.entitlements # iCloud permissions
+│       │   └── Assets.xcassets/ # App icons and images
+│       └── Podfile             # CocoaPods dependencies
+├── capacitor.config.json       # Capacitor configuration
+├── build-capacitor.js          # Build script for iOS
+└── package.json                # Node.js dependencies
 ```
 
-## 🔧 API Endpoints
+## 🔧 Data Storage & Sync
 
-### Tasks
-- `GET /api/tasks` - Get all tasks (with filtering)
-- `POST /api/tasks` - Create new task
-- `PUT /api/tasks/:id` - Update task
-- `PATCH /api/tasks/:id/status` - Update task status
-- `DELETE /api/tasks/:id` - Delete task
+### iCloud Integration
+- **Automatic Sync**: Data syncs across all devices signed into the same Apple ID
+- **Offline First**: Works without internet, syncs when connected
+- **Real-time Updates**: Changes appear on other devices within seconds
+- **Conflict Resolution**: Last-write-wins with timestamp comparison
 
-### Notes
-- `GET /api/tasks/:id/notes` - Get task notes
-- `POST /api/tasks/:id/notes` - Add note to task
-- `PUT /api/notes/:id` - Update note
-- `DELETE /api/notes/:id` - Delete note
-
-### Tags
-- `GET /api/tags` - Get all unique tags
+### Data Storage
+- **Local Storage**: Capacitor Preferences for immediate access
+- **iCloud Key-Value Store**: For cross-device synchronization
+- **File Attachments**: Stored in app's Documents directory with iCloud sync
+- **No External Servers**: All data stays in your personal iCloud
 
 ## 🎨 Customization
 
@@ -195,18 +175,21 @@ The application uses CSS custom properties for easy theming. Main colors can be 
 }
 ```
 
-### Database Schema
-The database schema supports:
+### Data Schema
+The app's data structure supports:
 - Tasks with status, priority, tags, and pending reasons
-- Notes linked to tasks
+- Notes linked to tasks with file attachments
+- Subtasks for task breakdown
 - Timestamps for creation and updates
+- File attachments with clickable links
 
 ## 🔒 Security Notes
 
-- Environment variables are used for sensitive configuration
-- Input validation on both frontend and backend
-- SQL injection protection through parameterized queries
-- CORS enabled for cross-origin requests
+- **iCloud Security**: All data is encrypted in transit and at rest by Apple
+- **Local Storage**: Data is stored securely in the app's sandbox
+- **Input Validation**: Frontend validation for all user inputs
+- **No External Servers**: Data never leaves your personal iCloud account
+- **Apple Privacy**: Follows Apple's privacy guidelines and data protection
 
 ## 🤝 Contributing
 
@@ -224,33 +207,37 @@ This project is open source and available under the [MIT License](LICENSE).
 
 ### Common Issues
 
-**Database Connection Error**
-- Verify PostgreSQL is running
-- Check database credentials in `.env`
-- Ensure database exists and user has proper permissions
+**iCloud Not Syncing**
+- Ensure you're signed into iCloud on all devices
+- Check that iCloud Drive is enabled in Settings
+- Verify the same Apple ID is used on all devices
+- Try logging out and back into iCloud
 
-**Port Already in Use**
-- Change the PORT in `.env` to an available port
-- Kill any process using port 3012: `lsof -ti:3012 | xargs kill -9`
+**Build Errors in Xcode**
+- Clean build folder: Product → Clean Build Folder
+- Delete `ios/App/Pods` and run `npx cap sync ios`
+- Ensure Xcode command line tools are installed
+- Check that your Apple Developer account is properly configured
 
-**Docker Issues**
-- Ensure Docker is running
-- Try `docker-compose down` then `docker-compose up -d`
-- Check logs: `docker-compose logs`
+**File Attachments Not Working**
+- Ensure the app has proper file access permissions
+- Check that files are being saved to the Documents directory
+- Verify iCloud Documents sync is enabled
 
 ## 📞 Support
 
 If you encounter any issues or have questions:
 1. Check the troubleshooting section above
-2. Search existing [GitHub Issues](https://github.com/oxtobyd/Kanban_ToDo/issues)
+2. Search existing [GitHub Issues](https://github.com/oxtobyd/Kanban_ToDo_iOS/issues)
 3. Create a new issue with detailed information
 
 ## 🙏 Acknowledgments
 
-- Built with modern web technologies
+- Built with Capacitor for native iOS/macOS performance
+- iCloud sync powered by Apple's NSUbiquitousKeyValueStore
 - Inspired by popular Kanban tools like Trello and Jira
-- Icons and design patterns follow modern UI/UX principles
+- Icons and design patterns follow Apple's Human Interface Guidelines
 
 ---
 
-**Made with ❤️ for productivity enthusiasts**
+**Made with ❤️ for Apple ecosystem productivity enthusiasts**
