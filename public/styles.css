@@ -152,6 +152,70 @@ body {
     gap: 20px;
 }
 
+/* iPad and tablet specific styles */
+@media (min-width: 768px) and (max-width: 1023px) {
+    .kanban-board {
+        grid-template-columns: repeat(4, 1fr);
+        gap: 10px;
+        width: 100%;
+        overflow-x: hidden;
+    }
+    
+    .column {
+        padding: 12px;
+        min-width: 0; /* Allow columns to shrink */
+        max-width: 100%;
+        overflow: hidden;
+    }
+    
+    .app {
+        padding: 10px;
+        max-width: 100%;
+        width: 100%;
+    }
+    
+    .header {
+        padding: 12px 15px;
+        margin-bottom: 20px;
+    }
+    
+    .column-header h2 {
+        font-size: 1rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    
+    .task {
+        padding: 10px;
+        margin-bottom: 8px;
+    }
+    
+    .task-title {
+        font-size: 0.85rem;
+        line-height: 1.3;
+    }
+    
+    .task-description {
+        font-size: 0.8rem;
+        line-height: 1.3;
+    }
+    
+    .task-meta {
+        font-size: 0.75rem;
+    }
+    
+    .priority-badge {
+        font-size: 0.7rem;
+        padding: 2px 6px;
+    }
+    
+    .tag {
+        font-size: 0.7rem;
+        padding: 2px 6px;
+    }
+}
+
 /* Ensure four columns side-by-side on wider screens (e.g., iPad landscape) */
 @media (min-width: 1024px) {
     .kanban-board {
@@ -599,8 +663,8 @@ body {
     border-radius: 10px;
 }
 
-/* Mobile-First Responsive Design */
-@media (max-width: 1024px) {
+/* Mobile-First Responsive Design - only for phones */
+@media (max-width: 767px) {
     .app {
         padding: 15px;
     }
