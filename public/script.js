@@ -19,6 +19,8 @@ class TodoApp {
         this.isSwiping = false;
         this.swipeThreshold = 50; // Minimum distance for swipe
         this.swipeTimeout = null;
+        // Individual task expansion state
+        this.expandedTasks = new Set();
         this.init();
     }
 
@@ -198,8 +200,10 @@ class TodoApp {
         return `
             <div class="task-card ${priorityClass}" draggable="true" data-task-id="${task.id}">
                 <div class="task-header">
-                    <div class="task-title">${title}</div>
-                    <div class="priority-badge priority-${task.priority || 'medium'}" onclick="app.showPriorityDropdown(event, ${task.id}, '${task.priority || 'medium'}')" title="Click to change priority">${priorityLabel}</div>
+                    <div class="task-title" onclick="app.toggleTaskExpansion(${task.id})" title="Click to expand/collapse task details">${title}</div>
+                    <div class="task-header-actions">
+                        <div class="priority-badge priority-${task.priority || 'medium'}" onclick="app.showPriorityDropdown(event, ${task.id}, '${task.priority || 'medium'}')" title="Click to change priority">${priorityLabel}</div>
+                    </div>
                 </div>
                 <div class="task-description">${description}</div>
                 ${tagsHTML}
@@ -700,6 +704,23 @@ class TodoApp {
             }
         } catch (error) {
             console.error('Error deleting task:', error);
+        }
+    }
+
+    toggleTaskExpansion(taskId) {
+        const taskCard = document.querySelector(`[data-task-id="${taskId}"]`);
+        const expandBtn = taskCard.querySelector('.task-expand-btn');
+        
+        if (this.expandedTasks.has(taskId)) {
+            // Collapse the task
+            this.expandedTasks.delete(taskId);
+            taskCard.classList.remove('expanded');
+            expandBtn.classList.remove('expanded');
+        } else {
+            // Expand the task
+            this.expandedTasks.add(taskId);
+            taskCard.classList.add('expanded');
+            expandBtn.classList.add('expanded');
         }
     }
 

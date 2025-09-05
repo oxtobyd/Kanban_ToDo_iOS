@@ -281,14 +281,13 @@ body {
 }
 
 /* Collapsed task styles */
-.column.collapsed .task {
+.column.collapsed .task-card {
     padding: 8px 12px;
     margin-bottom: 6px;
     min-height: auto;
 }
 
 .column.collapsed .task-description,
-.column.collapsed .task-meta,
 .column.collapsed .task-tags,
 .column.collapsed .task-notes,
 .column.collapsed .task-subtasks,
@@ -302,6 +301,20 @@ body {
     display: none;
 }
 
+/* Show task-meta but hide the date span in collapsed columns */
+.column.collapsed .task-meta {
+    display: flex;
+}
+
+.column.collapsed .task-meta > span {
+    display: none;
+}
+
+/* Hide delete button in collapsed columns */
+.column.collapsed .task-actions .delete-btn {
+    display: none !important;
+}
+
 .column.collapsed .task-header {
     margin-bottom: 4px;
 }
@@ -313,7 +326,7 @@ body {
 }
 
 .column.collapsed .task-actions {
-    justify-content: flex-end;
+    justify-content: space-between;
     gap: 4px;
 }
 
@@ -326,6 +339,81 @@ body {
 .column.collapsed .task-actions .delete-btn svg {
     width: 14px;
     height: 14px;
+}
+
+
+/* Individual task expansion in collapsed columns */
+.column.collapsed .task-card.expanded {
+    padding: 16px;
+    margin-bottom: 12px;
+    min-height: auto;
+}
+
+/* Show ALL task details when individually expanded in collapsed column */
+.column.collapsed .task-card.expanded .task-description,
+.column.collapsed .task-card.expanded .task-meta,
+.column.collapsed .task-card.expanded .task-tags,
+.column.collapsed .task-card.expanded .task-notes,
+.column.collapsed .task-card.expanded .task-subtasks,
+.column.collapsed .task-card.expanded .subtasks-section,
+.column.collapsed .task-card.expanded .subtasks-header,
+.column.collapsed .task-card.expanded .subtasks-list,
+.column.collapsed .task-card.expanded .subtask-item,
+.column.collapsed .task-card.expanded .add-subtask,
+.column.collapsed .task-card.expanded .task-actions .edit-btn,
+.column.collapsed .task-card.expanded .task-actions .notes-btn,
+.column.collapsed .task-card.expanded .pending-reason {
+    display: block !important;
+}
+
+.column.collapsed .task-card.expanded .task-header {
+    margin-bottom: 8px;
+}
+
+.column.collapsed .task-card.expanded .task-title {
+    font-size: 1rem;
+    line-height: 1.4;
+    margin-bottom: 8px;
+}
+
+.column.collapsed .task-card.expanded .task-actions {
+    justify-content: space-between;
+    gap: 8px;
+}
+
+/* Show all action buttons when task is individually expanded */
+.column.collapsed .task-card.expanded .task-actions .notes-btn,
+.column.collapsed .task-card.expanded .task-actions .edit-btn,
+.column.collapsed .task-card.expanded .task-actions .delete-btn {
+    display: flex !important;
+    padding: 6px;
+    min-width: 32px;
+    min-height: 32px;
+}
+
+.column.collapsed .task-card.expanded .task-actions .delete-btn svg,
+.column.collapsed .task-card.expanded .task-actions .notes-btn svg,
+.column.collapsed .task-card.expanded .task-actions .edit-btn svg {
+    width: 14px;
+    height: 14px;
+}
+
+/* Task header actions container */
+.task-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Make task title clickable in collapsed columns */
+.column.collapsed .task-title {
+    cursor: pointer;
+    user-select: none;
+    transition: color 0.2s;
+}
+
+.column.collapsed .task-title:hover {
+    color: #3b82f6;
 }
 
 .column-header h2 {
