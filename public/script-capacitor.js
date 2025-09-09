@@ -22,6 +22,13 @@ class TodoApp {
         this.swipeTimeout = null;
         this.mobileColumn = 'todo';
         this.isDragging = false;
+        // Mobile drag and drop properties
+        this.draggedTask = null;
+        this.dragPreview = null;
+        this.longPressTimer = null;
+        this.longPressThreshold = 500; // 500ms for long press
+        this.hasMoved = false;
+        this.initialTouch = null;
         // Individual task expansion state
         this.expandedTasks = new Set();
     }
@@ -338,6 +345,7 @@ class TodoApp {
         
         return `
             <div class="task-card ${priorityClass}" draggable="true" data-task-id="${task.id}">
+                <div class="drag-handle">⋮⋮</div>
                 <div class="task-header">
                     <div class="task-title" onclick="app.toggleTaskExpansion(${task.id})" title="Click to expand/collapse task details">${title}</div>
                     <div class="task-header-actions">
@@ -708,10 +716,20 @@ class TodoApp {
 
             this.touchStartX = e.touches[0].clientX;
             this.touchStartY = e.touches[0].clientY;
+            this.touchEndX = this.touchStartX;
+            this.touchEndY = this.touchStartY;
             this.isSwiping = false;
+            this.hasMoved = false;
+            
+            // Store the initial touch for drag mode detection
+            this.initialTouch = {
+                x: e.touches[0].clientX,
+                y: e.touches[0].clientY,
+                time: Date.now()
+            };
             
             taskCard.classList.add('touch-active');
-        }, { passive: true });
+        }, { passive: false });
 
         document.addEventListener('touchmove', (e) => {
             const taskCard = e.target.closest('.task-card');
@@ -720,9 +738,39 @@ class TodoApp {
             this.touchEndX = e.touches[0].clientX;
             this.touchEndY = e.touches[0].clientY;
 
+            // Handle drag mode
+            if (this.isDragging) {
+                e.preventDefault();
+                this.updateDragPosition(e.touches[0]);
+                return;
+            }
+
             const deltaX = this.touchEndX - this.touchStartX;
             const deltaY = this.touchEndY - this.touchStartY;
+            const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+            
+            // Mark as moved if distance is significant
+            if (distance > 5) {
+                this.hasMoved = true;
+            }
 
+            // Check for drag mode activation (hold + move)
+            if (this.initialTouch && !this.isDragging && !this.isSwiping) {
+                const timeHeld = Date.now() - this.initialTouch.time;
+                const distanceMoved = Math.sqrt(
+                    Math.pow(e.touches[0].clientX - this.initialTouch.x, 2) + 
+                    Math.pow(e.touches[0].clientY - this.initialTouch.y, 2)
+                );
+                
+                // If held for 300ms and moved more than 10px, enter drag mode
+                if (timeHeld > 300 && distanceMoved > 10) {
+                    e.preventDefault();
+                    this.enterDragMode(taskCard, e.touches[0]);
+                    return;
+                }
+            }
+
+            // Handle horizontal swipes
             if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 10) {
                 this.isSwiping = true;
                 e.preventDefault();
@@ -741,6 +789,21 @@ class TodoApp {
         document.addEventListener('touchend', (e) => {
             const taskCard = e.target.closest('.task-card');
             if (!taskCard) return;
+
+            // Handle drag end
+            if (this.isDragging) {
+                this.endDragMode(e);
+                return;
+            }
+
+            // Check for tap-and-hold without movement (alternative drag activation)
+            if (this.initialTouch && !this.hasMoved && !this.isSwiping) {
+                const timeHeld = Date.now() - this.initialTouch.time;
+                if (timeHeld > 800) { // 800ms hold without movement
+                    this.enterDragMode(taskCard, e.changedTouches[0]);
+                    return;
+                }
+            }
 
             taskCard.classList.remove('touch-active', 'swiping-left', 'swiping-right');
             
@@ -770,7 +833,10 @@ class TodoApp {
                 }
             }
 
+            // Reset touch state
             this.isSwiping = false;
+            this.hasMoved = false;
+            this.initialTouch = null;
         }, { passive: true });
     }
 
@@ -783,6 +849,140 @@ class TodoApp {
         } else {
             return currentIndex > 0 ? statusFlow[currentIndex - 1] : currentStatus;
         }
+    }
+
+    // Mobile drag and drop methods
+    enterDragMode(taskCard, touch) {
+        this.isDragging = true;
+        this.draggedTask = taskCard;
+        
+        // Add haptic feedback if available
+        if (navigator.vibrate) {
+            navigator.vibrate(50);
+        }
+        
+        // Create drag preview
+        this.createDragPreview(taskCard, touch);
+        
+        // Add visual feedback
+        taskCard.classList.add('mobile-dragging');
+        
+        // Highlight drop zones
+        this.highlightDropZones();
+        
+        // Prevent scrolling
+        document.body.style.overflow = 'hidden';
+    }
+
+    createDragPreview(taskCard, touch) {
+        // Create a floating preview of the task
+        this.dragPreview = taskCard.cloneNode(true);
+        this.dragPreview.classList.add('drag-preview');
+        this.dragPreview.style.position = 'fixed';
+        this.dragPreview.style.pointerEvents = 'none';
+        this.dragPreview.style.zIndex = '9999';
+        this.dragPreview.style.transform = 'scale(1.1)';
+        this.dragPreview.style.opacity = '0.9';
+        this.dragPreview.style.boxShadow = '0 8px 32px rgba(0, 0, 0, 0.3)';
+        
+        // Position at touch point
+        this.updateDragPreviewPosition(touch);
+        
+        document.body.appendChild(this.dragPreview);
+        
+        // Make original task semi-transparent
+        taskCard.style.opacity = '0.3';
+    }
+
+    updateDragPosition(touch) {
+        if (this.dragPreview) {
+            this.updateDragPreviewPosition(touch);
+            this.updateDropZoneHighlight(touch);
+        }
+    }
+
+    updateDragPreviewPosition(touch) {
+        if (this.dragPreview) {
+            const rect = this.dragPreview.getBoundingClientRect();
+            this.dragPreview.style.left = (touch.clientX - rect.width / 2) + 'px';
+            this.dragPreview.style.top = (touch.clientY - rect.height / 2) + 'px';
+        }
+    }
+
+    updateDropZoneHighlight(touch) {
+        // Find which column the touch is over
+        const elementBelow = document.elementFromPoint(touch.clientX, touch.clientY);
+        const column = elementBelow?.closest('.column');
+        
+        // Remove previous highlights
+        document.querySelectorAll('.column').forEach(col => {
+            col.classList.remove('drag-over');
+        });
+        
+        // Highlight current column if it's different from source
+        if (column && column !== this.draggedTask.closest('.column')) {
+            column.classList.add('drag-over');
+        }
+    }
+
+    highlightDropZones() {
+        // Add visual indicators to all columns except the source
+        const sourceColumn = this.draggedTask.closest('.column');
+        document.querySelectorAll('.column').forEach(column => {
+            if (column !== sourceColumn) {
+                column.classList.add('drop-zone-active');
+            }
+        });
+    }
+
+    endDragMode(touchEvent) {
+        if (!this.isDragging) return;
+        
+        // Find drop target
+        const elementBelow = document.elementFromPoint(this.touchEndX, this.touchEndY);
+        const targetColumn = elementBelow?.closest('.column');
+        
+        // Check if dropped on a valid target
+        if (targetColumn && targetColumn !== this.draggedTask.closest('.column')) {
+            const taskId = this.draggedTask.dataset.taskId;
+            const newStatus = targetColumn.dataset.status;
+            
+            // If dropping into pending column, ask for reason
+            if (newStatus === 'pending') {
+                this.showPendingReasonModal(taskId);
+            } else {
+                this.updateTaskStatus(taskId, newStatus);
+            }
+        }
+        
+        // Clean up drag mode
+        this.cleanupDragMode();
+    }
+
+    cleanupDragMode() {
+        // Remove drag preview
+        if (this.dragPreview) {
+            this.dragPreview.remove();
+            this.dragPreview = null;
+        }
+        
+        // Reset original task
+        if (this.draggedTask) {
+            this.draggedTask.classList.remove('mobile-dragging');
+            this.draggedTask.style.opacity = '';
+            this.draggedTask = null;
+        }
+        
+        // Remove drop zone highlights
+        document.querySelectorAll('.column').forEach(column => {
+            column.classList.remove('drag-over', 'drop-zone-active');
+        });
+        
+        // Re-enable scrolling
+        document.body.style.overflow = '';
+        
+        // Reset drag state
+        this.isDragging = false;
     }
 
     showSwipeAnimation(taskCard, swipeRight) {

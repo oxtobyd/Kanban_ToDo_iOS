@@ -1610,6 +1610,7 @@ esture Styles */
         user-select: none;
         -webkit-user-select: none;
         -webkit-touch-callout: none;
+        transition: all 0.2s ease;
     }
     
     .swipe-instructions {
@@ -1638,6 +1639,67 @@ esture Styles */
         -moz-user-select: none;
         -ms-user-select: none;
         user-select: none;
+    }
+    
+    /* Mobile drag mode styles */
+    .task-card.mobile-dragging {
+        transform: scale(0.95);
+        opacity: 0.3 !important;
+        z-index: 1000;
+    }
+    
+    .drag-preview {
+        position: fixed !important;
+        pointer-events: none !important;
+        z-index: 9999 !important;
+        transform: scale(1.1) !important;
+        opacity: 0.9 !important;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3) !important;
+        border-radius: 10px !important;
+        background: white !important;
+        max-width: 300px !important;
+    }
+    
+    /* Drop zone highlighting */
+    .column.drop-zone-active {
+        background: rgba(102, 126, 234, 0.1);
+        border: 2px dashed #667eea;
+        border-radius: 10px;
+        transition: all 0.2s ease;
+    }
+    
+    .column.drag-over {
+        background: rgba(102, 126, 234, 0.2) !important;
+        border: 2px solid #667eea !important;
+        transform: scale(1.02);
+    }
+    
+    /* Long press indicator */
+    .task-card.touch-active {
+        background: rgba(102, 126, 234, 0.05);
+    }
+    
+    /* Drag handle indicator */
+    .task-card {
+        position: relative;
+    }
+    
+    .task-card .drag-handle {
+        position: absolute;
+        right: 8px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: #cbd5e0;
+        font-size: 12px;
+        line-height: 1;
+        opacity: 0.6;
+        pointer-events: none;
+        z-index: 1;
+    }
+    
+    .task-card:hover .drag-handle {
+        opacity: 1;
+        color: #667eea;
     }
 }
 
@@ -1679,7 +1741,7 @@ esture Styles */
     }
     
     .column-header::after {
-        content: 'Swipe tasks ← → to move';
+        content: 'Swipe ← → or hold + move to drag';
         position: absolute;
         bottom: -25px;
         left: 0;
