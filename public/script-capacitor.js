@@ -345,11 +345,11 @@ class TodoApp {
         
         return `
             <div class="task-card ${priorityClass}" draggable="true" data-task-id="${task.id}">
-                <div class="drag-handle">⋮⋮</div>
                 <div class="task-header">
                     <div class="task-title" onclick="app.toggleTaskExpansion(${task.id})" title="Click to expand/collapse task details">${title}</div>
                     <div class="task-header-actions">
                         <div class="priority-badge priority-${task.priority || 'medium'}" onclick="app.showPriorityDropdown(event, ${task.id}, '${task.priority || 'medium'}')" title="Click to change priority">${priorityLabel}</div>
+                        <div class="drag-handle">⋮⋮</div>
                     </div>
                 </div>
                 <div class="task-description">${description}</div>
@@ -656,6 +656,10 @@ class TodoApp {
                 e.dataTransfer.setData('text/plain', card.dataset.taskId);
                 this.isDragging = true;
                 document.body.classList.add('no-text-select');
+                
+                // Additional text selection prevention
+                document.body.style.userSelect = 'none';
+                document.body.style.webkitUserSelect = 'none';
             }
         });
 
@@ -665,6 +669,10 @@ class TodoApp {
                 card.classList.remove('dragging');
                 this.isDragging = false;
                 document.body.classList.remove('no-text-select');
+                
+                // Re-enable text selection after drag
+                document.body.style.userSelect = '';
+                document.body.style.webkitUserSelect = '';
             }
         });
 

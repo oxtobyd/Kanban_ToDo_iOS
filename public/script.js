@@ -205,11 +205,11 @@ class TodoApp {
         
         return `
             <div class="task-card ${priorityClass}" draggable="true" data-task-id="${task.id}">
-                <div class="drag-handle">⋮⋮</div>
                 <div class="task-header">
                     <div class="task-title" onclick="app.toggleTaskExpansion(${task.id})" title="Click to expand/collapse task details">${title}</div>
                     <div class="task-header-actions">
                         <div class="priority-badge priority-${task.priority || 'medium'}" onclick="app.showPriorityDropdown(event, ${task.id}, '${task.priority || 'medium'}')" title="Click to change priority">${priorityLabel}</div>
+                        <div class="drag-handle">⋮⋮</div>
                     </div>
                 </div>
                 <div class="task-description">${description}</div>
@@ -304,12 +304,20 @@ class TodoApp {
             if (e.target.classList.contains('task-card')) {
                 e.target.classList.add('dragging');
                 e.dataTransfer.setData('text/plain', e.target.dataset.taskId);
+                
+                // Prevent text selection during drag
+                document.body.style.userSelect = 'none';
+                document.body.style.webkitUserSelect = 'none';
             }
         });
 
         document.addEventListener('dragend', (e) => {
             if (e.target.classList.contains('task-card')) {
                 e.target.classList.remove('dragging');
+                
+                // Re-enable text selection after drag
+                document.body.style.userSelect = '';
+                document.body.style.webkitUserSelect = '';
             }
         });
 

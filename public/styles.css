@@ -447,6 +447,10 @@ body {
     cursor: grab;
     transition: all 0.3s ease;
     border-left: 4px solid #667eea;
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
 }
 
 .task-card:hover {
@@ -457,6 +461,19 @@ body {
 .task-card.dragging {
     opacity: 0.5;
     transform: rotate(5deg);
+    cursor: grabbing;
+    user-select: none !important;
+    -webkit-user-select: none !important;
+    -moz-user-select: none !important;
+    -ms-user-select: none !important;
+}
+
+/* Prevent text selection during drag operations */
+.no-text-select {
+    user-select: none !important;
+    -webkit-user-select: none !important;
+    -moz-user-select: none !important;
+    -ms-user-select: none !important;
 }
 
 .task-title {
@@ -1679,22 +1696,24 @@ esture Styles */
         background: rgba(102, 126, 234, 0.05);
     }
     
-    /* Drag handle indicator */
-    .task-card {
-        position: relative;
-    }
-    
+}
+
+/* Drag handle styles - hidden by default, shown only on mobile */
+.task-card .drag-handle {
+    color: #cbd5e0;
+    font-size: 12px;
+    line-height: 1;
+    opacity: 0.6;
+    pointer-events: none;
+    margin-left: 8px;
+    display: none; /* Hidden by default */
+    align-items: center;
+}
+
+/* Show drag handle only on mobile/touch devices */
+@media (hover: none) and (pointer: coarse) {
     .task-card .drag-handle {
-        position: absolute;
-        right: 8px;
-        top: 50%;
-        transform: translateY(-50%);
-        color: #cbd5e0;
-        font-size: 12px;
-        line-height: 1;
-        opacity: 0.6;
-        pointer-events: none;
-        z-index: 1;
+        display: flex;
     }
     
     .task-card:hover .drag-handle {
