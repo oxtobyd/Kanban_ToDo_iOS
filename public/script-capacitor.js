@@ -53,6 +53,7 @@ class TodoApp {
 
         // Initialize data service
         await window.dataService.init();
+        // Bust any cached assets by appending a cache-busting param to fetches if needed
         
         await this.loadTags();
         await this.loadTasks();
@@ -2231,6 +2232,447 @@ class TodoApp {
         } catch (error) {
             console.error('Error during manual sync:', error);
             this.showNotification('Sync failed. Please try again.', 'error');
+        }
+    }
+
+    openPrintModal() {
+        const modal = document.getElementById('printModal');
+        if (modal) modal.style.display = 'block';
+    }
+
+    closePrintModal() {
+        const modal = document.getElementById('printModal');
+        if (modal) modal.style.display = 'none';
+    }
+
+    async previewSelected() {
+        const columns = ['todo', 'in_progress', 'pending', 'done'];
+        const include = columns.filter(c => {
+            const cb = document.getElementById(`print-col-${c}`);
+            return cb ? cb.checked : false;
+        });
+        this.closePrintModal();
+        const compact = !!document.getElementById('print-compact')?.checked;
+        // Prefer native flow on Capacitor
+        await this.exportAndOpenPrintable(include, compact);
+    }
+
+    async exportPdfSelected() {
+        const columns = ['todo', 'in_progress', 'pending', 'done'];
+        const include = columns.filter(c => document.getElementById(`print-col-${c}`)?.checked);
+        const compact = !!document.getElementById('print-compact')?.checked;
+        this.closePrintModal();
+        // Build printable HTML and export using the same path as the overlay's Export PDF
+        const tasksByStatus = { todo: [], in_progress: [], pending: [], done: [] };
+        for (const t of this.tasks) {
+            if (!tasksByStatus[t.status]) tasksByStatus[t.status] = [];
+            try {
+                const subtasks = await window.dataService.getSubtasks(t.id);
+                t.__subtasks = subtasks || [];
+            } catch(_) { t.__subtasks = []; }
+            tasksByStatus[t.status].push(t);
+        }
+        const html = this.buildPrintableHTML(include, tasksByStatus, compact);
+        await this.exportPdfFromHtml(html);
+    }
+
+    async generateAndPrint(includeStatuses) {
+        if (!includeStatuses || includeStatuses.length === 0) {
+            this.showNotification('Please select at least one column to print.', 'warning');
+            return;
+        }
+        const printable = document.createElement('div');
+        printable.id = 'print-root';
+        printable.style.padding = '24px';
+        printable.style.fontFamily = 'system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif';
+        printable.innerHTML = `
+            <style>
+                @media print {
+                    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+                    body * { visibility: hidden !important; }
+                    #print-root, #print-root * { visibility: visible !important; }
+                    #print-root { position: absolute; left: 0; top: 0; width: 100%; }
+                }
+                .pr-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
+                .pr-title { font-size:20px; font-weight:700; }
+                .pr-sub { color:#64748b; font-size:12px; }
+                .pr-columns { display:grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap:16px; }
+                .pr-col { border:1px solid #e5e7eb; border-radius:8px; padding:12px; background:#fff; }
+                .pr-col h3 { margin:0 0 8px; font-size:13px; text-transform:uppercase; letter-spacing:.04em; color:#475569; }
+                .pr-task { border:1px solid #e5e7eb; border-radius:8px; padding:10px; margin:8px 0; background:#fff; }
+                .pr-task .pr-title { font-size:14px; font-weight:600; }
+                .pr-desc { color:#334155; font-size:12px; margin-top:4px; white-space:pre-wrap; }
+                .pr-tags { margin-top:6px; display:flex; flex-wrap:wrap; gap:6px; }
+                .pr-tag { border:1px solid #c7d2fe; color:#4f46e5; border-radius:999px; padding:2px 6px; font-size:10px; }
+                .pr-subtasks { margin-top:8px; }
+                .pr-subtasks .pr-subtitle { font-size:12px; font-weight:600; margin-bottom:4px; }
+                .pr-subtasks ul { margin:0; padding-left:16px; }
+                .pr-subtasks li { font-size:12px; margin:2px 0; }
+                .pr-meta { margin-top:6px; color:#64748b; font-size:10px; }
+            </style>
+        `;
+
+        const header = document.createElement('div');
+        header.className = 'pr-header';
+        header.innerHTML = `<div class="pr-title">Kanban Tasks</div><div class="pr-sub">Printed ${new Date().toLocaleString()}</div>`;
+        printable.appendChild(header);
+
+        const grid = document.createElement('div');
+        grid.className = 'pr-columns';
+
+        for (const status of includeStatuses) {
+            const colDiv = document.createElement('div');
+            colDiv.className = 'pr-col';
+            const statusLabelMap = { todo: 'To Do', in_progress: 'In Progress', pending: 'Pending', done: 'Done' };
+            colDiv.innerHTML = `<h3>${statusLabelMap[status] || status}</h3>`;
+
+            const tasks = this.tasks.filter(t => t.status === status);
+            for (const task of tasks) {
+                const taskDiv = document.createElement('div');
+                taskDiv.className = 'pr-task';
+                const created = new Date(task.created_at).toLocaleDateString();
+                const tagsHTML = (task.tags || []).map(t => `<span class=\"pr-tag\">${this.escapeHtml(t)}</span>`).join('');
+                let subtasksHTML = '';
+                try {
+                    const subtasks = await window.dataService.getSubtasks(task.id);
+                    if (Array.isArray(subtasks) && subtasks.length) {
+                        subtasksHTML = `
+                            <div class=\"pr-subtasks\">
+                                <div class=\"pr-subtitle\">Sub-tasks</div>
+                                <ul>
+                                    ${subtasks.map(st => `<li>${st.completed ? '✅ ' : '⬜️ '}${this.escapeHtml(st.title)}</li>`).join('')}
+                                </ul>
+                            </div>`;
+                    }
+                } catch(_) {}
+
+                taskDiv.innerHTML = `
+                    <div class=\"pr-title\">${this.escapeHtml(task.title)}</div>
+                    ${task.description ? `<div class=\"pr-desc\">${this.escapeHtml(task.description)}</div>` : ''}
+                    ${(task.tags && task.tags.length) ? `<div class=\"pr-tags\">${tagsHTML}</div>` : ''}
+                    ${subtasksHTML}
+                    <div class=\"pr-meta\">Priority: ${this.escapeHtml(task.priority || 'medium')} • Created: ${created}</div>
+                `;
+                colDiv.appendChild(taskDiv);
+            }
+
+            grid.appendChild(colDiv);
+        }
+
+        printable.appendChild(grid);
+
+        document.body.appendChild(printable);
+        setTimeout(() => {
+            try { window.print(); } finally {
+                setTimeout(() => { if (printable && printable.parentNode) printable.parentNode.removeChild(printable); }, 300);
+            }
+        }, 50);
+    }
+
+    buildPrintableHTML(includeStatuses, tasksByStatus, compact = false) {
+        const style = `
+            <style>
+                @media print {
+                    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+                }
+                body { margin: 0; padding: 24px; font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; }
+                .pr-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
+                .pr-title { font-size:20px; font-weight:700; }
+                .pr-sub { color:#64748b; font-size:12px; }
+                .pr-columns { display:grid; grid-template-columns: repeat(auto-fit, minmax(${compact ? '220' : '260'}px, 1fr)); gap:${compact ? '10' : '16'}px; }
+                .pr-col { border:1px solid #e5e7eb; border-radius:8px; padding:${compact ? '8' : '12'}px; background:#fff; }
+                .pr-col h3 { margin:0 0 ${compact ? '6' : '8'}px; font-size:${compact ? '12' : '13'}px; text-transform:uppercase; letter-spacing:.04em; color:#475569; }
+                .pr-task { border:1px solid #e5e7eb; border-radius:8px; padding:${compact ? '8' : '10'}px; margin:${compact ? '6' : '8'}px 0; background:#fff; }
+                .pr-task .pr-title { font-size:${compact ? '12.5' : '14'}px; font-weight:600; }
+                .pr-desc { color:#334155; font-size:${compact ? '11' : '12'}px; margin-top:${compact ? '2' : '4'}px; white-space:pre-wrap; }
+                .pr-tags { margin-top:6px; display:flex; flex-wrap:wrap; gap:6px; }
+                .pr-tag { border:1px solid #c7d2fe; color:#4f46e5; border-radius:999px; padding:${compact ? '1' : '2'}px ${compact ? '4' : '6'}px; font-size:${compact ? '9' : '10'}px; }
+                .pr-subtasks { margin-top:${compact ? '6' : '8'}px; }
+                .pr-subtasks .pr-subtitle { font-size:${compact ? '11' : '12'}px; font-weight:600; margin-bottom:${compact ? '2' : '4'}px; }
+                .pr-subtasks ul { margin:0; padding-left:16px; }
+                .pr-subtasks li { font-size:${compact ? '11' : '12'}px; margin:${compact ? '1' : '2'}px 0; }
+                .pr-meta { margin-top:${compact ? '4' : '6'}px; color:#64748b; font-size:${compact ? '9' : '10'}px; }
+            </style>`;
+        const statusLabelMap = { todo: 'To Do', in_progress: 'In Progress', pending: 'Pending', done: 'Done' };
+        let columnsHTML = '';
+        for (const status of includeStatuses) {
+            const tasks = tasksByStatus[status] || [];
+            const colTasks = tasks.map(task => {
+                const created = new Date(task.created_at).toLocaleDateString();
+                const tagsHTML = (task.tags || []).map(t => `<span class="pr-tag">${this.escapeHtml(t)}</span>`).join('');
+                const subtasks = task.__subtasks || [];
+                const subtasksHTML = subtasks.length ? `
+                    <div class="pr-subtasks">
+                        <div class="pr-subtitle">Sub-tasks</div>
+                        <ul>
+                            ${subtasks.map(st => `<li>${st.completed ? '✅ ' : '⬜️ '}${this.escapeHtml(st.title)}</li>`).join('')}
+                        </ul>
+                    </div>` : '';
+                return `
+                    <div class="pr-task">
+                        <div class="pr-title">${this.escapeHtml(task.title)}</div>
+                        ${task.description ? `<div class="pr-desc">${this.escapeHtml(task.description)}</div>` : ''}
+                        ${(task.tags && task.tags.length) ? `<div class="pr-tags">${tagsHTML}</div>` : ''}
+                        ${subtasksHTML}
+                        <div class="pr-meta">Priority: ${this.escapeHtml(task.priority || 'medium')} • Created: ${created}</div>
+                    </div>`;
+            }).join('');
+            columnsHTML += `<div class="pr-col"><h3>${statusLabelMap[status] || status}</h3>${colTasks || '<div class="pr-empty">No tasks</div>'}</div>`;
+        }
+        const header = `<div class="pr-header"><div class="pr-title">Kanban Tasks</div><div class="pr-sub">Printed ${new Date().toLocaleString()}</div></div>`;
+        const helper = `<script>(function(){try{window.addEventListener('message',function(e){try{var d=e&&e.data;var should=(d==="print")||(d&&d.type==="print");if(should){try{window.focus&&window.focus();}catch(_){} setTimeout(function(){try{window.print&&window.print();}catch(_){ }},50);}}catch(_){}});}catch(_){}})();</script>`;
+        return `<!doctype html><html><head><meta charset="utf-8">${style}<title>Kanban Tasks</title></head><body>${header}<div class="pr-columns">${columnsHTML}</div>${helper}</body></html>`;
+    }
+
+    async exportAndOpenPrintable(includeStatuses, compact = false) {
+        try {
+            // Collect tasks and their subtasks
+            const tasksByStatus = { todo: [], in_progress: [], pending: [], done: [] };
+            for (const t of this.tasks) {
+                if (!tasksByStatus[t.status]) tasksByStatus[t.status] = [];
+                // fetch subtasks
+                try {
+                    const subtasks = await window.dataService.getSubtasks(t.id);
+                    t.__subtasks = subtasks || [];
+                } catch(_) { t.__subtasks = []; }
+                tasksByStatus[t.status].push(t);
+            }
+
+            const html = this.buildPrintableHTML(includeStatuses, tasksByStatus, compact);
+
+            // Detect Mac Catalyst (Capacitor platform ios + Mac user agent)
+            const isCatalyst = !!(window.Capacitor && typeof window.Capacitor.getPlatform === 'function' && window.Capacitor.getPlatform() === 'ios' && /Macintosh/.test(navigator.userAgent));
+            if (isCatalyst) {
+                // Use in-app overlay iframe instead of window.open (blocked in WKWebView/Catalyst)
+                this.openPreviewOverlay(html);
+                return;
+            }
+            if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Filesystem) {
+                const { Filesystem, App, Share } = window.Capacitor.Plugins;
+                const fileName = `kanban-print-${new Date().toISOString().replace(/[:T]/g,'-').split('.')[0]}.html`;
+                await Filesystem.writeFile({ path: fileName, data: html, directory: 'DOCUMENTS', encoding: 'utf8' });
+                try {
+                    const { uri } = await Filesystem.getUri({ path: fileName, directory: 'DOCUMENTS' });
+                    // Prefer opening the HTML directly so user can use iOS native print/share in the viewer
+                    if (App && App.openUrl) {
+                        await App.openUrl({ url: uri });
+                    } else if (Share && Share.share) {
+                        await Share.share({ title: 'Kanban Tasks', url: uri, dialogTitle: 'Share/Print tasks' });
+                    }
+                } catch (e) {
+                    // As a fallback, show a download via data URI
+                    const blob = new Blob([html], { type: 'text/html' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url; a.download = fileName; document.body.appendChild(a); a.click(); document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                }
+            } else {
+                // Fallback to web print
+                await this.generateAndPrint(includeStatuses);
+            }
+        } catch (error) {
+            console.error('Export printable failed:', error);
+            this.showNotification('Failed to prepare printable version', 'error');
+        }
+    }
+
+    async exportPdfNative(includeStatuses, compact = false) {
+        try {
+            // Prefer native Print plugin with HTML content for reliable PDF/Preview
+            const tasksByStatus = { todo: [], in_progress: [], pending: [], done: [] };
+            for (const t of this.tasks) {
+                if (!tasksByStatus[t.status]) tasksByStatus[t.status] = [];
+                try { t.__subtasks = await window.dataService.getSubtasks(t.id); } catch(_) { t.__subtasks = []; }
+                tasksByStatus[t.status].push(t);
+            }
+            const html = this.buildPrintableHTML(includeStatuses, tasksByStatus, compact);
+            const isCatalyst = !!(window.Capacitor && typeof window.Capacitor.getPlatform === 'function' && window.Capacitor.getPlatform() === 'ios' && /Macintosh/.test(navigator.userAgent));
+            const Print = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Print;
+            if (isCatalyst) {
+                // Mac Catalyst: no reliable print dialog; present overlay instead
+                this.openPreviewOverlay(html);
+                return;
+            }
+            // iOS device: let the native print controller handle HTML → PDF reliably
+            if (Print && window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Filesystem) {
+                const { Filesystem } = window.Capacitor.Plugins;
+                const fileName = `kanban-print-${Date.now()}.html`;
+                await Filesystem.writeFile({ path: fileName, data: html, directory: 'DOCUMENTS', encoding: 'utf8', recursive: true });
+                const { uri } = await Filesystem.getUri({ path: fileName, directory: 'DOCUMENTS' });
+                await Print.print({ url: uri });
+                return;
+            }
+            // Fallbacks for Mac Catalyst / Simulator: save HTML then try multiple open paths
+            const { Filesystem, App, Share } = window.Capacitor.Plugins || {};
+            if (Filesystem) {
+                const fileName = `kanban-print-${Date.now()}.html`;
+                await Filesystem.writeFile({ path: fileName, data: html, directory: 'DOCUMENTS', encoding: 'utf8', recursive: true });
+                const { uri } = await Filesystem.getUri({ path: fileName, directory: 'DOCUMENTS' });
+                let opened = false;
+                try {
+                    if (App && App.openUrl) {
+                        await App.openUrl({ url: uri });
+                        opened = true;
+                    }
+                } catch (_) {}
+                if (!opened) {
+                    try {
+                        if (Share && Share.share) {
+                            await Share.share({ title: 'Kanban Tasks', url: uri, dialogTitle: 'Share/Print' });
+                            opened = true;
+                        }
+                    } catch (_) {}
+                }
+                if (!opened) {
+                    try {
+                        const blob = new Blob([html], { type: 'text/html' });
+                        const url = URL.createObjectURL(blob);
+                        window.open(url, '_blank');
+                        opened = true;
+                    } catch (_) {}
+                }
+                if (opened) return;
+            }
+            // Last resort: web preview
+            await this.generateAndPrint(includeStatuses, compact);
+        } catch (e) {
+            console.error('Native PDF export failed:', e);
+            this.showNotification('PDF export failed', 'error');
+        }
+    }
+
+    openPreviewOverlay(html) {
+        try {
+            // Remove any existing overlay
+            const existing = document.getElementById('preview-overlay');
+            if (existing && existing.parentNode) existing.parentNode.removeChild(existing);
+
+            const overlay = document.createElement('div');
+            overlay.id = 'preview-overlay';
+            overlay.style.position = 'fixed';
+            overlay.style.inset = '0';
+            overlay.style.background = 'rgba(15, 23, 42, 0.65)';
+            overlay.style.zIndex = '9999';
+            overlay.style.display = 'flex';
+            overlay.style.alignItems = 'center';
+            overlay.style.justifyContent = 'center';
+
+            const frameWrap = document.createElement('div');
+            frameWrap.style.width = 'min(1100px, 94vw)';
+            frameWrap.style.height = 'min(80vh, 900px)';
+            frameWrap.style.borderRadius = '12px';
+            frameWrap.style.overflow = 'hidden';
+            frameWrap.style.boxShadow = '0 15px 35px rgba(0,0,0,0.35)';
+            frameWrap.style.background = '#fff';
+            frameWrap.style.position = 'relative';
+
+            const controls = document.createElement('div');
+            controls.style.position = 'absolute';
+            controls.style.top = '8px';
+            controls.style.right = '8px';
+            controls.style.display = 'flex';
+            controls.style.gap = '8px';
+
+            const btnClose = document.createElement('button');
+            btnClose.textContent = 'Close';
+            btnClose.style.padding = '6px 10px';
+            btnClose.style.border = '1px solid #e2e8f0';
+            btnClose.style.borderRadius = '8px';
+            btnClose.style.background = '#fff';
+            btnClose.onclick = () => overlay.parentNode && overlay.parentNode.removeChild(overlay);
+
+            const btnPdf = document.createElement('button');
+            btnPdf.textContent = 'Export PDF…';
+            btnPdf.style.padding = '6px 10px';
+            btnPdf.style.border = '1px solid #e2e8f0';
+            btnPdf.style.borderRadius = '8px';
+            btnPdf.style.background = '#fff';
+            btnPdf.onclick = async () => {
+                try {
+                    // Ensure iframe is ready
+                    const doc = iframe.contentDocument || (iframe.contentWindow && iframe.contentWindow.document);
+                    if (!doc || !doc.body) { return; }
+                    const target = doc.body;
+                    // Render to canvas and build paginated PDF
+                    const canvas = await html2canvas(target, { scale: 2, backgroundColor: '#ffffff' });
+                    const { jsPDF } = window.jspdf || {};
+                    if (!jsPDF) { return; }
+                    const pdf = new jsPDF('p', 'pt', 'a4');
+                    const pageWidth = pdf.internal.pageSize.getWidth();
+                    const pageHeight = pdf.internal.pageSize.getHeight();
+                    const imgWidth = pageWidth - 40;
+                    const imgHeight = (canvas.height * imgWidth) / canvas.width;
+                    const sliceHeight = (canvas.width * (pageHeight - 40)) / imgWidth;
+                    let position = 0;
+                    while (position < canvas.height) {
+                        const sliceCanvas = document.createElement('canvas');
+                        sliceCanvas.width = canvas.width;
+                        sliceCanvas.height = Math.min(sliceHeight, canvas.height - position);
+                        const ctx = sliceCanvas.getContext('2d');
+                        ctx.drawImage(canvas, 0, position, canvas.width, sliceCanvas.height, 0, 0, sliceCanvas.width, sliceCanvas.height);
+                        const sliceImg = sliceCanvas.toDataURL('image/jpeg', 0.95);
+                        if (position > 0) pdf.addPage();
+                        pdf.addImage(sliceImg, 'JPEG', 20, 20, imgWidth, (sliceCanvas.height * imgWidth) / sliceCanvas.width);
+                        position += sliceHeight;
+                    }
+                    // Save to Documents via Capacitor and open
+                    const blob = pdf.output('blob');
+                    const base64 = await new Promise((resolve, reject) => {
+                        const reader = new FileReader();
+                        reader.onload = () => {
+                            try { resolve(String(reader.result).split(',')[1] || ''); } catch (e) { reject(e); }
+                        };
+                        reader.onerror = reject;
+                        reader.readAsDataURL(blob);
+                    });
+                    const plugins = (window.Capacitor && window.Capacitor.Plugins) || {};
+                    const { Filesystem, App, Share } = plugins;
+                    if (Filesystem) {
+                        const fileName = `kanban-tasks-${new Date().toISOString().split('T')[0]}.pdf`;
+                        // Write as base64 without encoding flag so native decodes to binary
+                        await Filesystem.writeFile({ path: fileName, data: base64, directory: 'DOCUMENTS', recursive: true });
+                        const { uri } = await Filesystem.getUri({ path: fileName, directory: 'DOCUMENTS' });
+                        let opened = false;
+                        try { if (App && App.openUrl) { await App.openUrl({ url: uri }); opened = true; } } catch (_) {}
+                        if (!opened) {
+                            try { if (Share && Share.share) { await Share.share({ title: 'Kanban Tasks PDF', url: uri, dialogTitle: 'Share/Print PDF' }); opened = true; } } catch (_) {}
+                        }
+                        if (!opened) {
+                            // Fallback to in-memory open
+                            const url = URL.createObjectURL(blob);
+                            window.open(url, '_blank');
+                        }
+                    } else {
+                        // Last resort: in-memory open
+                        const url = URL.createObjectURL(blob);
+                        window.open(url, '_blank');
+                    }
+                } catch (e) { console.error('PDF export failed', e); }
+            };
+
+            controls.appendChild(btnPdf);
+            controls.appendChild(btnClose);
+
+            const iframe = document.createElement('iframe');
+            iframe.style.width = '100%';
+            iframe.style.height = '100%';
+            iframe.style.border = '0';
+            // Use srcdoc so the iframe is same-origin for messaging
+            iframe.srcdoc = html;
+
+            frameWrap.appendChild(iframe);
+            frameWrap.appendChild(controls);
+            overlay.appendChild(frameWrap);
+            document.body.appendChild(overlay);
+        } catch (e) {
+            console.error('Preview overlay failed:', e);
+            // Last resort: data URI open attempt
+            try {
+                const blob = new Blob([html], { type: 'text/html' });
+                const url = URL.createObjectURL(blob);
+                window.location.href = url;
+            } catch(_) {}
         }
     }
 }

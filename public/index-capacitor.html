@@ -6,6 +6,9 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="theme-color" content="#667eea">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>Todo Kanban Board</title>
     
     <!-- Favicons -->
@@ -60,6 +63,13 @@
                     </select>
                 </div>
                 <div class="data-actions">
+                    <button class="print-btn" onclick="app.openPrintModal()" title="Print">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="6,9 6,3 18,3 18,9"></polyline>
+                            <rect x="6" y="13" width="12" height="8"></rect>
+                            <line x1="6" y1="17" x2="18" y2="17"></line>
+                        </svg>
+                    </button>
                     <button class="export-btn" onclick="app.exportData()" title="Export Data">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
@@ -425,5 +435,36 @@
 
     <!-- Main App Script -->
     <script src="script-capacitor.js"></script>
+    <!-- PDF libs (for rendering to PDF images if needed) -->
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+    
+    <!-- Print Modal -->
+    <div class="modal" id="printModal" style="display:none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Print Tasks</h3>
+                <button class="close-btn" onclick="app.closePrintModal()">&times;</button>
+            </div>
+            <div class="form-group">
+                <label>Select columns to include</label>
+                <div class="checkbox-group">
+                    <label class="option-card"><input type="checkbox" id="print-col-todo" checked><div><div class="option-title">To Do</div><div class="option-sub">Tasks not started</div></div></label>
+                    <label class="option-card"><input type="checkbox" id="print-col-in_progress" checked><div><div class="option-title">In Progress</div><div class="option-sub">Currently being worked on</div></div></label>
+                    <label class="option-card"><input type="checkbox" id="print-col-pending" checked><div><div class="option-title">Pending</div><div class="option-sub">Blocked or waiting</div></div></label>
+                    <label class="option-card"><input type="checkbox" id="print-col-done" checked><div><div class="option-title">Done</div><div class="option-sub">Completed tasks</div></div></label>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Layout</label>
+                <div class="option-card"><input type="checkbox" id="print-compact" checked><div><div class="option-title">Compact</div><div class="option-sub">More tasks per page</div></div></div>
+                <div class="hint">Your current filters apply to the printout.</div>
+            </div>
+            <div class="form-actions">
+                <button type="button" onclick="app.closePrintModal()">Cancel</button>
+                <button type="button" onclick="app.previewSelected()">Preview</button>
+            </div>
+        </div>
+    </div>
 </body>
 </html>

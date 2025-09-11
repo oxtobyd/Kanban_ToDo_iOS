@@ -60,6 +60,13 @@
                     </select>
                 </div>
                 <div class="data-actions">
+                    <button class="print-btn" onclick="app.openPrintModal()" title="Print">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="6,9 6,3 18,3 18,9"></polyline>
+                            <rect x="6" y="13" width="12" height="8"></rect>
+                            <line x1="6" y1="17" x2="18" y2="17"></line>
+                        </svg>
+                    </button>
                     <button class="export-btn" onclick="app.exportData()" title="Export Data">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
@@ -304,5 +311,36 @@
     </div>
 
     <script src="script.js"></script>
+    <!-- PDF libs -->
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+    
+    <!-- Print Modal -->
+    <div class="modal" id="printModal" style="display:none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Print Tasks</h3>
+                <button class="close-btn" onclick="app.closePrintModal()">&times;</button>
+            </div>
+            <div class="form-group">
+                <label>Select columns to include</label>
+                <div class="checkbox-group">
+                    <label class="checkbox-label"><input type="checkbox" id="print-col-todo" checked> To Do</label>
+                    <label class="checkbox-label"><input type="checkbox" id="print-col-in_progress" checked> In Progress</label>
+                    <label class="checkbox-label"><input type="checkbox" id="print-col-pending" checked> Pending</label>
+                    <label class="checkbox-label"><input type="checkbox" id="print-col-done" checked> Done</label>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Layout</label>
+                <label class="checkbox-label"><input type="checkbox" id="print-compact" checked> Compact (more tasks per page)</label>
+            </div>
+            <div class="form-actions">
+                <button type="button" onclick="app.closePrintModal()">Cancel</button>
+                <button type="button" onclick="app.previewSelected()">Preview</button>
+                <button type="button" onclick="app.exportPdfSelected()">Export PDF</button>
+            </div>
+        </div>
+    </div>
 </body>
 </html>

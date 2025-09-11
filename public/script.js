@@ -1715,6 +1715,179 @@ class TodoApp {
             }, 300);
         }, 4000);
     }
+
+    openPrintModal() {
+        const modal = document.getElementById('printModal');
+        if (modal) modal.style.display = 'block';
+    }
+
+    closePrintModal() {
+        const modal = document.getElementById('printModal');
+        if (modal) modal.style.display = 'none';
+    }
+
+    async previewSelected() {
+        const columns = ['todo', 'in_progress', 'pending', 'done'];
+        const include = columns.filter(c => {
+            const cb = document.getElementById(`print-col-${c}`);
+            return cb ? cb.checked : false;
+        });
+        const compact = !!document.getElementById('print-compact')?.checked;
+        this.closePrintModal();
+        await this.generateAndPrint(include, compact);
+    }
+
+    async exportPdfSelected() {
+        const columns = ['todo', 'in_progress', 'pending', 'done'];
+        const include = columns.filter(c => document.getElementById(`print-col-${c}`)?.checked);
+        const compact = !!document.getElementById('print-compact')?.checked;
+        this.closePrintModal();
+        await this.generatePdf(include, compact);
+    }
+
+    async generateAndPrint(includeStatuses, compact = false) {
+        if (!includeStatuses || includeStatuses.length === 0) {
+            this.showNotification('Please select at least one column to print.', 'warning');
+            return;
+        }
+        // Build a printable document in-place (better for iOS WebView)
+        const printable = document.createElement('div');
+        printable.id = 'print-root';
+        printable.style.padding = '24px';
+        printable.style.fontFamily = 'system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif';
+        printable.innerHTML = `
+            <style>
+                @media print {
+                    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+                    body * { visibility: hidden !important; }
+                    #print-root, #print-root * { visibility: visible !important; }
+                    #print-root { position: absolute; left: 0; top: 0; width: 100%; }
+                }
+                .pr-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
+                .pr-title { font-size:20px; font-weight:700; }
+                .pr-sub { color:#64748b; font-size:12px; }
+                .pr-columns { display:grid; grid-template-columns: repeat(auto-fit, minmax(${compact ? '220' : '260'}px, 1fr)); gap:${compact ? '10' : '16'}px; }
+                .pr-col { border:1px solid #e5e7eb; border-radius:8px; padding:${compact ? '8' : '12'}px; background:#fff; }
+                .pr-col h3 { margin:0 0 ${compact ? '6' : '8'}px; font-size:${compact ? '12' : '13'}px; text-transform:uppercase; letter-spacing:.04em; color:#475569; }
+                .pr-task { border:1px solid #e5e7eb; border-radius:8px; padding:${compact ? '8' : '10'}px; margin:${compact ? '6' : '8'}px 0; background:#fff; }
+                .pr-task .pr-title { font-size:${compact ? '12.5' : '14'}px; font-weight:600; }
+                .pr-desc { color:#334155; font-size:${compact ? '11' : '12'}px; margin-top:${compact ? '2' : '4'}px; white-space:pre-wrap; }
+                .pr-tags { margin-top:6px; display:flex; flex-wrap:wrap; gap:6px; }
+                .pr-tag { border:1px solid #c7d2fe; color:#4f46e5; border-radius:999px; padding:${compact ? '1' : '2'}px ${compact ? '4' : '6'}px; font-size:${compact ? '9' : '10'}px; }
+                .pr-subtasks { margin-top:${compact ? '6' : '8'}px; }
+                .pr-subtasks .pr-subtitle { font-size:${compact ? '11' : '12'}px; font-weight:600; margin-bottom:${compact ? '2' : '4'}px; }
+                .pr-subtasks ul { margin:0; padding-left:16px; }
+                .pr-subtasks li { font-size:${compact ? '11' : '12'}px; margin:${compact ? '1' : '2'}px 0; }
+                .pr-meta { margin-top:${compact ? '4' : '6'}px; color:#64748b; font-size:${compact ? '9' : '10'}px; }
+            </style>
+        `;
+
+        const header = document.createElement('div');
+        header.className = 'pr-header';
+        header.innerHTML = `<div class="pr-title">Kanban Tasks</div><div class="pr-sub">Printed ${new Date().toLocaleString()}</div>`;
+        printable.appendChild(header);
+
+        const grid = document.createElement('div');
+        grid.className = 'pr-columns';
+
+        for (const status of includeStatuses) {
+            const colDiv = document.createElement('div');
+            colDiv.className = 'pr-col';
+            const statusLabelMap = { todo: 'To Do', in_progress: 'In Progress', pending: 'Pending', done: 'Done' };
+            colDiv.innerHTML = `<h3>${statusLabelMap[status] || status}</h3>`;
+
+            const tasks = this.tasks.filter(t => t.status === status);
+            // For subtasks, we need to fetch them. We'll inline fetch sequentionally to keep it simple.
+            for (const task of tasks) {
+                const taskDiv = document.createElement('div');
+                taskDiv.className = 'pr-task';
+                const created = new Date(task.created_at).toLocaleDateString();
+                const tagsHTML = (task.tags || []).map(t => `<span class="pr-tag">${this.escapeHtml(t)}</span>`).join('');
+                let subtasksHTML = '';
+                try {
+                    const resp = await fetch(`/api/tasks/${task.id}/subtasks`);
+                    const subtasks = await resp.json();
+                    if (Array.isArray(subtasks) && subtasks.length) {
+                        subtasksHTML = `
+                            <div class="pr-subtasks">
+                                <div class="pr-subtitle">Sub-tasks</div>
+                                <ul>
+                                    ${subtasks.map(st => `<li>${st.completed ? '✅ ' : '⬜️ '}${this.escapeHtml(st.title)}</li>`).join('')}
+                                </ul>
+                            </div>`;
+                    }
+                } catch(_) {}
+
+                taskDiv.innerHTML = `
+                    <div class="pr-title">${this.escapeHtml(task.title)}</div>
+                    ${task.description ? `<div class="pr-desc">${this.escapeHtml(task.description)}</div>` : ''}
+                    ${(task.tags && task.tags.length) ? `<div class="pr-tags">${tagsHTML}</div>` : ''}
+                    ${subtasksHTML}
+                    <div class="pr-meta">Priority: ${this.escapeHtml(task.priority || 'medium')} • Created: ${created}</div>
+                `;
+                colDiv.appendChild(taskDiv);
+            }
+
+            grid.appendChild(colDiv);
+        }
+
+        printable.appendChild(grid);
+
+        // Inject and print
+        document.body.appendChild(printable);
+        setTimeout(() => {
+            try { window.print(); } finally {
+                setTimeout(() => { if (printable && printable.parentNode) printable.parentNode.removeChild(printable); }, 300);
+            }
+        }, 50);
+    }
+
+    async generatePdf(includeStatuses, compact = false) {
+        if (!includeStatuses || includeStatuses.length === 0) {
+            this.showNotification('Please select at least one column to export.', 'warning');
+            return;
+        }
+        // Reuse the on-page print DOM for consistent layout
+        await this.generateAndPrint(includeStatuses, compact);
+        const printable = document.getElementById('print-root');
+        if (!printable) return;
+        try {
+            const canvas = await html2canvas(printable, { scale: 2, backgroundColor: '#ffffff' });
+            const imgData = canvas.toDataURL('image/jpeg', 0.95);
+            const { jsPDF } = window.jspdf;
+            const pdf = new jsPDF('p', 'pt', 'a4');
+            const pageWidth = pdf.internal.pageSize.getWidth();
+            const pageHeight = pdf.internal.pageSize.getHeight();
+            const imgWidth = pageWidth - 40; // margins
+            const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+            let y = 20;
+            if (imgHeight < pageHeight - 40) {
+                pdf.addImage(imgData, 'JPEG', 20, y, imgWidth, imgHeight);
+            } else {
+                // Split across pages
+                let position = 0;
+                const sliceHeight = (canvas.width * (pageHeight - 40)) / imgWidth;
+                while (position < canvas.height) {
+                    const sliceCanvas = document.createElement('canvas');
+                    sliceCanvas.width = canvas.width;
+                    sliceCanvas.height = Math.min(sliceHeight, canvas.height - position);
+                    const ctx = sliceCanvas.getContext('2d');
+                    ctx.drawImage(canvas, 0, position, canvas.width, sliceCanvas.height, 0, 0, sliceCanvas.width, sliceCanvas.height);
+                    const sliceImg = sliceCanvas.toDataURL('image/jpeg', 0.95);
+                    if (position > 0) pdf.addPage();
+                    pdf.addImage(sliceImg, 'JPEG', 20, 20, imgWidth, (sliceCanvas.height * imgWidth) / sliceCanvas.width);
+                    position += sliceHeight;
+                }
+            }
+            // Cleanup print DOM before saving
+            if (printable && printable.parentNode) printable.parentNode.removeChild(printable);
+            pdf.save(`kanban-tasks-${new Date().toISOString().split('T')[0]}.pdf`);
+        } catch (e) {
+            console.error('PDF export failed:', e);
+            this.showNotification('PDF export failed', 'error');
+        }
+    }
 }
 
 // Global functions for HTML onclick handlers
