@@ -5,7 +5,7 @@ const pool = require('../config/database');
 // Get all tasks
 router.get('/tasks', async (req, res) => {
   try {
-    const { priority, sortBy = 'created_at', sortOrder = 'DESC', search, tag } = req.query;
+    const { priority, sortBy = 'created_at', sortOrder = 'DESC', search, tag, tags, excludeTags } = req.query;
     let query = 'SELECT * FROM tasks';
     let whereConditions = [];
     let params = [];
@@ -23,10 +23,35 @@ router.get('/tasks', async (req, res) => {
       params.push(`%${search}%`);
     }
     
+    // Legacy single tag param support
     if (tag) {
       paramCount++;
       whereConditions.push(`$${paramCount} = ANY(tags)`);
       params.push(tag);
+    }
+    // Multi-include tags (comma-separated)
+    if (tags) {
+      const includeList = String(tags).split(',').map(t => t.trim()).filter(Boolean);
+      if (includeList.length > 0) {
+        // require all include tags to be present
+        includeList.forEach(t => {
+          paramCount++;
+          whereConditions.push(`$${paramCount} = ANY(tags)`);
+          params.push(t);
+        });
+      }
+    }
+    // Exclude tags (comma-separated) - ensure none of these exist in task tags
+    if (excludeTags) {
+      const excludeList = String(excludeTags).split(',').map(t => t.trim()).filter(Boolean);
+      if (excludeList.length > 0) {
+        paramCount++;
+        // "NOT (tags && ARRAY[...])" -> no overlap
+        const arrayLiterals = excludeList.map((_, idx) => `$${paramCount + idx}`).join(',');
+        whereConditions.push(`NOT (tags && ARRAY[${arrayLiterals}])`);
+        excludeList.forEach(t => params.push(t));
+        paramCount += excludeList.length - 1;
+      }
     }
     
     if (whereConditions.length > 0) {

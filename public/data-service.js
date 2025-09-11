@@ -303,10 +303,21 @@ class DataService {
             );
         }
         
-        if (filters.tag) {
-            filteredTasks = filteredTasks.filter(task => 
-                task.tags && task.tags.includes(filters.tag)
-            );
+        const includeTags = Array.isArray(filters.includeTags) ? filters.includeTags.filter(Boolean) : [];
+        const excludeTags = Array.isArray(filters.excludeTags) ? filters.excludeTags.filter(Boolean) : [];
+        
+        if (includeTags.length > 0) {
+            filteredTasks = filteredTasks.filter(task => {
+                const taskTags = task.tags || [];
+                return includeTags.every(t => taskTags.includes(t));
+            });
+        }
+        
+        if (excludeTags.length > 0) {
+            filteredTasks = filteredTasks.filter(task => {
+                const taskTags = task.tags || [];
+                return excludeTags.every(t => !taskTags.includes(t));
+            });
         }
         
         // Apply sorting

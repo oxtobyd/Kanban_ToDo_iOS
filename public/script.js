@@ -5,7 +5,8 @@ class TodoApp {
         this.currentPriority = '';
         this.currentSortBy = 'priority';
         this.currentSearch = '';
-        this.currentTag = '';
+        this.currentIncludeTags = [];
+        this.currentExcludeTags = [];
         this.currentTaskTags = [];
         this.availableTags = [];
         this.searchTimeout = null;
@@ -50,13 +51,14 @@ class TodoApp {
         console.log('TodoApp initialized successfully');
     }
 
-    async loadTasks(priority = null, sortBy = null, search = null, tag = null) {
+    async loadTasks(priority = null, sortBy = null, search = null, includeTags = null, excludeTags = null) {
         try {
             // Use provided values or keep current state
             if (priority !== null) this.currentPriority = priority;
             if (sortBy !== null) this.currentSortBy = sortBy;
             if (search !== null) this.currentSearch = search;
-            if (tag !== null) this.currentTag = tag;
+            if (includeTags !== null) this.currentIncludeTags = Array.isArray(includeTags) ? includeTags : (includeTags ? [includeTags] : []);
+            if (excludeTags !== null) this.currentExcludeTags = Array.isArray(excludeTags) ? excludeTags : (excludeTags ? [excludeTags] : []);
             
             // Sync UI dropdowns with current state
             this.syncUIState();
@@ -67,7 +69,8 @@ class TodoApp {
             if (this.currentPriority) params.append('priority', this.currentPriority);
             if (this.currentSortBy) params.append('sortBy', this.currentSortBy);
             if (this.currentSearch) params.append('search', this.currentSearch);
-            if (this.currentTag) params.append('tag', this.currentTag);
+            if (this.currentIncludeTags && this.currentIncludeTags.length > 0) params.append('tags', this.currentIncludeTags.join(','));
+            if (this.currentExcludeTags && this.currentExcludeTags.length > 0) params.append('excludeTags', this.currentExcludeTags.join(','));
             
             if (params.toString()) {
                 url += '?' + params.toString();
@@ -95,7 +98,8 @@ class TodoApp {
         // Update dropdown values to match current state
         const priorityFilter = document.getElementById('priorityFilter');
         const sortBy = document.getElementById('sortBy');
-        const tagFilter = document.getElementById('tagFilter');
+        const includeTagsFilter = document.getElementById('includeTagsFilter');
+        const excludeTagsFilter = document.getElementById('excludeTagsFilter');
         const searchInput = document.getElementById('searchInput');
         const clearSearch = document.getElementById('clearSearch');
         
@@ -104,9 +108,18 @@ class TodoApp {
             priorityFilter.classList.toggle('filter-active', !!this.currentPriority);
         }
         if (sortBy) sortBy.value = this.currentSortBy;
-        if (tagFilter) {
-            tagFilter.value = this.currentTag;
-            tagFilter.classList.toggle('filter-active', !!this.currentTag);
+        if (includeTagsFilter) {
+            // Sync options selection
+            Array.from(includeTagsFilter.options).forEach(opt => {
+                opt.selected = this.currentIncludeTags.includes(opt.value);
+            });
+            includeTagsFilter.classList.toggle('filter-active', this.currentIncludeTags.length > 0);
+        }
+        if (excludeTagsFilter) {
+            Array.from(excludeTagsFilter.options).forEach(opt => {
+                opt.selected = this.currentExcludeTags.includes(opt.value);
+            });
+            excludeTagsFilter.classList.toggle('filter-active', this.currentExcludeTags.length > 0);
         }
         if (searchInput) {
             searchInput.value = this.currentSearch;
@@ -117,18 +130,32 @@ class TodoApp {
     }
 
     updateTagFilter() {
-        const tagFilter = document.getElementById('tagFilter');
-        if (!tagFilter) return;
+        const includeTagsFilter = document.getElementById('includeTagsFilter');
+        const excludeTagsFilter = document.getElementById('excludeTagsFilter');
+        if (!includeTagsFilter || !excludeTagsFilter) return;
         
-        // Clear existing options except "All Tags"
-        tagFilter.innerHTML = '<option value="">All Tags</option>';
+        // Preserve current selections
+        const prevInclude = new Set(this.currentIncludeTags);
+        const prevExclude = new Set(this.currentExcludeTags);
         
-        // Add available tags
+        // Clear and rebuild include filter
+        includeTagsFilter.innerHTML = '<option value="">Include tags…</option>';
         this.availableTags.forEach(tag => {
             const option = document.createElement('option');
             option.value = tag;
             option.textContent = tag;
-            tagFilter.appendChild(option);
+            option.selected = prevInclude.has(tag);
+            includeTagsFilter.appendChild(option);
+        });
+        
+        // Clear and rebuild exclude filter
+        excludeTagsFilter.innerHTML = '<option value="">Exclude tags…</option>';
+        this.availableTags.forEach(tag => {
+            const option = document.createElement('option');
+            option.value = tag;
+            option.textContent = tag;
+            option.selected = prevExclude.has(tag);
+            excludeTagsFilter.appendChild(option);
         });
     }
 
@@ -151,8 +178,13 @@ class TodoApp {
         this.loadTasks();
     }
 
-    async filterByTag(tag) {
-        this.currentTag = tag;
+    async filterByIncludeTags(tags) {
+        this.currentIncludeTags = (Array.isArray(tags) ? tags : []).filter(Boolean);
+        await this.loadTasks();
+    }
+
+    async filterByExcludeTags(tags) {
+        this.currentExcludeTags = (Array.isArray(tags) ? tags : []).filter(Boolean);
         await this.loadTasks();
     }
 
