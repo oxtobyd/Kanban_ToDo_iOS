@@ -1,3 +1,16 @@
+.file-link {
+    color: #667eea;
+    text-decoration: underline;
+    max-width: 100%;
+    display: inline-block;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    vertical-align: bottom;
+}
+/* Force tighter truncation on long file names */
+.task-description .file-link { max-width: 20ch; }
+.subtask-item .file-link { max-width: 20ch; }
 * {
     margin: 0;
     padding: 0;

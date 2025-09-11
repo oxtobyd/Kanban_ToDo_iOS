@@ -488,7 +488,10 @@ class TodoApp {
             // Clean up the file URI if it has extra text
             const cleanUri = fileUri.replace(/^[^f]*file:\/\//, 'file://');
             console.log('Cleaned URI:', cleanUri);
-            const linkHtml = `<a href="#" onclick="app.openFile('${cleanUri}', '${fileName}'); return false;" style="color: #667eea; text-decoration: underline; cursor: pointer;">📎 ${fileName}</a>`;
+            // Escape, then inline onclick so the anchor itself is clickable anywhere
+            const safeText = this.escapeHtml(fileName).replace(/"/g, '&quot;');
+            const safeUri = this.escapeHtml(cleanUri).replace(/"/g, '&quot;');
+            const linkHtml = `<a class="file-link" href="#" title="${safeText}" onclick="app.openFile('${safeUri}','${safeText}'); return false;">📎 ${safeText}</a>`;
             console.log('Generated link HTML:', linkHtml);
             return linkHtml;
         });
@@ -504,7 +507,7 @@ class TodoApp {
             if (!url.startsWith('http')) {
                 href = 'https://' + url;
             }
-            return `<a href="${href}" target="_blank" rel="noopener" style="color: #667eea; text-decoration: underline;">${url}</a>`;
+            return `<a class="file-link" href="${href}" target="_blank" rel="noopener">${url}</a>`;
         });
         
         return result;
@@ -540,44 +543,104 @@ class TodoApp {
         });
     }
 
+    getMimeTypeFromFileName(fileName) {
+        const ext = (fileName || '').split('.').pop().toLowerCase();
+        const map = {
+            'pdf': 'application/pdf',
+            'doc': 'application/msword',
+            'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'xls': 'application/vnd.ms-excel',
+            'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'ppt': 'application/vnd.ms-powerpoint',
+            'pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+            'txt': 'text/plain',
+            'rtf': 'application/rtf',
+            'csv': 'text/csv',
+            'json': 'application/json',
+            'zip': 'application/zip',
+            'jpg': 'image/jpeg',
+            'jpeg': 'image/jpeg',
+            'png': 'image/png',
+            'gif': 'image/gif',
+            'heic': 'image/heic',
+            'svg': 'image/svg+xml',
+            'md': 'text/markdown'
+        };
+        return map[ext] || '';
+    }
+
     async openFile(fileUri, fileName) {
         try {
-            console.log('=== OPEN FILE CALLED ===');
-            console.log('Attempting to open file:', { fileUri, fileName });
-            console.log('Capacitor available:', !!window.Capacitor);
-            console.log('App plugin available:', !!(window.Capacitor && window.Capacitor.Plugins.App));
-            console.log('FileViewer plugin available:', !!(window.Capacitor && window.Capacitor.Plugins.FileViewer));
-            
-            if (window.Capacitor && window.Capacitor.Plugins.App) {
-                console.log('App plugin methods:', Object.keys(window.Capacitor.Plugins.App));
+            // Debounce to avoid double-invocation on Mac Catalyst
+            if (this._openingFile) {
+                return;
             }
-            
-            // Try using window.open first (most reliable for file:// URLs on Mac)
-            console.log('Using window.open to open:', fileUri);
-            window.open(fileUri, '_blank');
-            this.showNotification(`Opening ${fileName}...`, 'success');
-            
-            // Also try FileViewer as backup
-            if (window.Capacitor && window.Capacitor.Plugins.FileViewer) {
-                console.log('Using FileViewer plugin to open:', fileUri);
-                await window.Capacitor.Plugins.FileViewer.openDocumentFromLocalPath({ path: fileUri });
-                this.showNotification(`Opening ${fileName}...`, 'success');
-            } else if (window.Capacitor && window.Capacitor.Plugins.FileOpener) {
-                // Try File Opener plugin with just the filename
-                const fileNameOnly = fileUri.split('/').pop();
-                console.log('Using FileOpener plugin to open filename:', fileNameOnly);
-                await window.Capacitor.Plugins.FileOpener.openFile({ path: fileNameOnly });
-                this.showNotification(`Opening ${fileName}...`, 'success');
-            } else {
-                // Fallback to window.open
-                console.log('Using window.open to open:', fileUri);
-                window.open(fileUri, '_blank');
-                this.showNotification(`Opening ${fileName}...`, 'success');
+            this._openingFile = true;
+            const decodedUri = decodeURIComponent(String(fileUri || ''));
+            const nameFromUri = decodedUri.split('/').pop() || fileName || 'file';
+            const contentType = this.getMimeTypeFromFileName(nameFromUri);
+            const plugins = (window.Capacitor && window.Capacitor.Plugins) || {};
+            const isCatalyst = !!(window.Capacitor && typeof window.Capacitor.getPlatform === 'function' && window.Capacitor.getPlatform() === 'ios' && /Macintosh/.test(navigator.userAgent));
+
+            // If we saved under Documents, prefer resolving via Filesystem to ensure sandbox-safe URL
+            const fileNameOnly = nameFromUri;
+            if (plugins.Filesystem) {
+                try {
+                    const { uri } = await plugins.Filesystem.getUri({ path: fileNameOnly, directory: 'DOCUMENTS' });
+                    if (plugins.App && plugins.App.openUrl) {
+                        await plugins.App.openUrl({ url: uri });
+                        this.showNotification(`Opening ${fileNameOnly}...`, 'success');
+                        return;
+                    }
+                    if (isCatalyst) {
+                        try { window.open(uri, '_blank'); return; } catch(_) {}
+                    }
+                } catch (_) {}
             }
+
+            // FileViewer expects a local filesystem path (no file:// scheme)
+            if (!isCatalyst && plugins.FileViewer && plugins.FileViewer.openDocumentFromLocalPath) {
+                try {
+                    const localPath = decodedUri.startsWith('file://') ? decodedUri.replace(/^file:\/\//, '') : decodedUri;
+                    await plugins.FileViewer.openDocumentFromLocalPath({ path: localPath, mimeType: contentType || undefined });
+                    this.showNotification(`Opening ${nameFromUri}...`, 'success');
+                    return;
+                } catch (_) {}
+            }
+
+            // Try FileOpener with explicit contentType and full URI
+            if (!isCatalyst && plugins.FileOpener && plugins.FileOpener.openFile) {
+                try {
+                    await plugins.FileOpener.openFile({ path: decodedUri, contentType: contentType || undefined });
+                    this.showNotification(`Opening ${nameFromUri}...`, 'success');
+                    return;
+                } catch (_) {}
+            }
+
+            // (Share dialog intentionally disabled to open directly in app)
+
+            // Last fallback: browser open
+            try { window.open(decodedUri, '_blank'); } catch(_) {}
+            this.showNotification(`Opening ${nameFromUri}...`, 'success');
         } catch (error) {
             console.error('Error opening file:', error);
             this.showNotification(`Could not open ${fileName}: ${error.message}`, 'error');
+        } finally {
+            setTimeout(() => { this._openingFile = false; }, 500);
         }
+    }
+
+    handleDescriptionLinkClick(event) {
+        try {
+            const anchor = event.target.closest('a.file-link');
+            if (!anchor) return;
+            event.preventDefault();
+            const uri = anchor.getAttribute('data-file-uri') || anchor.getAttribute('href');
+            const name = anchor.getAttribute('data-file-name') || anchor.textContent || 'file';
+            if (uri && uri.startsWith('file:')) {
+                this.openFile(uri, name);
+            }
+        } catch (_) {}
     }
 
     setupEventListeners() {
@@ -1407,14 +1470,19 @@ class TodoApp {
             // Convert to base64 using FileReader directly on File (most reliable for binary)
             const base64Data = await this.fileToBase64(file);
 
-            // Save to Documents with base64 and recursive
-            await Filesystem.writeFile({
+            // Save to Documents. On iOS/Catalyst, omit encoding flag (prevents rare corruption);
+            // on other platforms, keep encoding: 'base64'.
+            const isApple = typeof window.Capacitor?.getPlatform === 'function' && window.Capacitor.getPlatform() === 'ios';
+            const writeOptions = {
                 path: fileName,
                 data: base64Data,
                 directory: 'DOCUMENTS',
-                encoding: 'base64',
                 recursive: true
-            });
+            };
+            if (!isApple) {
+                writeOptions.encoding = 'base64';
+            }
+            await Filesystem.writeFile(writeOptions);
 
             // Resolve a URI we can open later
             const uriResult = await Filesystem.getUri({
@@ -1511,11 +1579,8 @@ class TodoApp {
                     const fileInfo = await this.handleFileDrop(file, noteTextarea);
                     
                     if (fileInfo) {
-                        const currentText = noteTextarea.value;
-                        const fileLink = `[File: ${fileInfo.fileName}](${fileInfo.uri})`;
-                        console.log('Generated file link:', fileLink);
-                        noteTextarea.value = currentText + (currentText ? '\n' : '') + fileLink;
-                        this.showNotification(`File "${fileInfo.fileName}" attached successfully!`, 'success');
+                        // handleFileDrop already inserts the link; avoid duplicating
+                        console.log('Attachment saved:', fileInfo);
                     } else {
                         this.showNotification('Failed to attach file', 'error');
                     }
@@ -1571,16 +1636,54 @@ class TodoApp {
                     const fileInfo = await this.handleFileDrop(file, subtaskInput);
                     
                     if (fileInfo) {
-                        const currentText = subtaskInput.value;
-                        const fileLink = `[File: ${fileInfo.fileName}](${fileInfo.uri})`;
-                        subtaskInput.value = currentText + (currentText ? ' ' : '') + fileLink;
-                        this.showNotification(`File "${fileInfo.fileName}" attached successfully!`, 'success');
+                        // handleFileDrop already inserts the link; avoid duplicating
+                        console.log('Attachment saved:', fileInfo);
                     } else {
                         this.showNotification('Failed to attach file', 'error');
                     }
                 }
             }
         });
+
+        // Setup file drag and drop for task description in the Task modal
+        const descTextarea = document.getElementById('taskDescription');
+        if (descTextarea) {
+            descTextarea.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'copy';
+                descTextarea.style.borderColor = '#667eea';
+                descTextarea.style.backgroundColor = '#f0f4ff';
+            });
+            descTextarea.addEventListener('dragleave', (e) => {
+                e.preventDefault();
+                descTextarea.style.borderColor = '';
+                descTextarea.style.backgroundColor = '';
+            });
+            descTextarea.addEventListener('drop', async (e) => {
+                e.preventDefault();
+                descTextarea.style.borderColor = '';
+                descTextarea.style.backgroundColor = '';
+                const uriList = e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain');
+                if (uriList) {
+                    const firstUri = uriList.split('\n')[0].trim();
+                    if (firstUri.startsWith('file:')) {
+                        const decodedName = decodeURIComponent(firstUri.split('/').pop() || 'file');
+                        const fileLink = `[File: ${decodedName}](${firstUri})`;
+                        const current = descTextarea.value;
+                        descTextarea.value = current + (current ? '\n' : '') + fileLink;
+                        descTextarea.dispatchEvent(new Event('input', { bubbles: true }));
+                        this.showNotification(`Linked file "${decodedName}"`, 'success');
+                        return;
+                    }
+                }
+                const files = e.dataTransfer.files;
+                if (files && files.length) {
+                    const file = files[0];
+                    const info = await this.handleFileDrop(file, descTextarea);
+                    if (!info) this.showNotification('Failed to attach file', 'error');
+                }
+            });
+        }
     }
 
     async editNote(noteId) {

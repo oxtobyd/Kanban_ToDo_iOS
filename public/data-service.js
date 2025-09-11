@@ -392,7 +392,21 @@ class DataService {
             throw new Error('Task not found');
         }
         
-        // Also delete related notes and subtasks
+        // Delete attachment files referenced by task, its notes, and its subtasks
+        try {
+            const task = this.tasks[taskIndex];
+            await this._deleteAttachmentsInText(task.description || '');
+            const relatedNotes = this.notes.filter(note => note.task_id === parseInt(id));
+            for (const note of relatedNotes) {
+                await this._deleteAttachmentsInText(note.content || '');
+            }
+            const relatedSubtasks = this.subtasks.filter(subtask => subtask.task_id === parseInt(id));
+            for (const st of relatedSubtasks) {
+                await this._deleteAttachmentsInText(st.title || '');
+            }
+        } catch (_) {}
+
+        // Also delete related notes and subtasks (data rows)
         this.notes = this.notes.filter(note => note.task_id !== parseInt(id));
         this.subtasks = this.subtasks.filter(subtask => subtask.task_id !== parseInt(id));
         
@@ -497,9 +511,37 @@ class DataService {
         if (subtaskIndex === -1) {
             throw new Error('Subtask not found');
         }
-        
+        // Delete attachment files referenced in the subtask title
+        try {
+            const subtask = this.subtasks[subtaskIndex];
+            await this._deleteAttachmentsInText(subtask.title || '');
+        } catch (_) {}
         this.subtasks.splice(subtaskIndex, 1);
         await this.saveToStorage();
+    }
+
+    // INTERNAL: delete files referenced by markdown-style links like
+    // [File: name](file:///.../Documents/filename)
+    async _deleteAttachmentsInText(text) {
+        try {
+            if (!text || !window.Capacitor || !window.Capacitor.Plugins || !window.Capacitor.Plugins.Filesystem) return;
+            const { Filesystem } = window.Capacitor.Plugins;
+            const regex = /\[File: [^\]]+\]\((file:[^)]+)\)/g;
+            let match;
+            const uris = [];
+            while ((match = regex.exec(String(text))) !== null) {
+                if (match[1]) uris.push(match[1]);
+            }
+            for (const uri of uris) {
+                try {
+                    const decoded = decodeURIComponent(uri);
+                    if (!/\/Documents\//.test(decoded)) continue;
+                    const fileName = decoded.split('/').pop();
+                    if (!fileName) continue;
+                    await Filesystem.deleteFile({ path: fileName, directory: 'DOCUMENTS' });
+                } catch (_) {}
+            }
+        } catch (_) {}
     }
 
     // Tags methods
