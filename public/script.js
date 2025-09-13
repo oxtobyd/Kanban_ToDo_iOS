@@ -132,6 +132,9 @@ class TodoApp {
     updateTagFilter() {
         const includeTagsFilter = document.getElementById('includeTagsFilter');
         const excludeTagsFilter = document.getElementById('excludeTagsFilter');
+        const floatingIncludeTagsFilter = document.getElementById('floatingIncludeTagsFilter');
+        const floatingExcludeTagsFilter = document.getElementById('floatingExcludeTagsFilter');
+        
         if (!includeTagsFilter || !excludeTagsFilter) return;
         
         // Preserve current selections
@@ -157,6 +160,29 @@ class TodoApp {
             option.selected = prevExclude.has(tag);
             excludeTagsFilter.appendChild(option);
         });
+        
+        // Update floating filters if they exist
+        if (floatingIncludeTagsFilter) {
+            floatingIncludeTagsFilter.innerHTML = '<option value="">Include tags…</option>';
+            this.availableTags.forEach(tag => {
+                const option = document.createElement('option');
+                option.value = tag;
+                option.textContent = tag;
+                option.selected = prevInclude.has(tag);
+                floatingIncludeTagsFilter.appendChild(option);
+            });
+        }
+        
+        if (floatingExcludeTagsFilter) {
+            floatingExcludeTagsFilter.innerHTML = '<option value="">Exclude tags…</option>';
+            this.availableTags.forEach(tag => {
+                const option = document.createElement('option');
+                option.value = tag;
+                option.textContent = tag;
+                option.selected = prevExclude.has(tag);
+                floatingExcludeTagsFilter.appendChild(option);
+            });
+        }
     }
 
     handleSearch(searchTerm) {
@@ -1888,6 +1914,97 @@ class TodoApp {
             this.showNotification('PDF export failed', 'error');
         }
     }
+
+    // Floating Tag Filter Methods
+    toggleFloatingTagFilter() {
+        const floatingFilter = document.getElementById('floatingTagFilter');
+        if (!floatingFilter) return;
+        
+        if (floatingFilter.style.display === 'none' || floatingFilter.style.display === '') {
+            this.openFloatingTagFilter();
+        } else {
+            this.closeFloatingTagFilter();
+        }
+    }
+
+    openFloatingTagFilter() {
+        const floatingFilter = document.getElementById('floatingTagFilter');
+        if (!floatingFilter) return;
+        
+        floatingFilter.style.display = 'block';
+        this.updateTagFilter(); // Sync with current selections
+        this.makeFloatingFilterDraggable();
+    }
+
+    closeFloatingTagFilter() {
+        const floatingFilter = document.getElementById('floatingTagFilter');
+        if (!floatingFilter) return;
+        
+        floatingFilter.style.display = 'none';
+    }
+
+    clearAllTagFilters() {
+        this.currentIncludeTags = [];
+        this.currentExcludeTags = [];
+        this.loadTasks();
+    }
+
+    makeFloatingFilterDraggable() {
+        const floatingFilter = document.getElementById('floatingTagFilter');
+        const header = floatingFilter.querySelector('.floating-tag-filter-header');
+        
+        if (!floatingFilter || !header) return;
+        
+        let isDragging = false;
+        let currentX;
+        let currentY;
+        let initialX;
+        let initialY;
+        let xOffset = 0;
+        let yOffset = 0;
+        
+        const dragStart = (e) => {
+            if (e.target.closest('button')) return; // Don't drag if clicking buttons
+            
+            initialX = e.clientX - xOffset;
+            initialY = e.clientY - yOffset;
+            
+            if (e.target === header || header.contains(e.target)) {
+                isDragging = true;
+                floatingFilter.style.cursor = 'grabbing';
+            }
+        };
+        
+        const dragEnd = () => {
+            initialX = currentX;
+            initialY = currentY;
+            isDragging = false;
+            floatingFilter.style.cursor = 'move';
+        };
+        
+        const drag = (e) => {
+            if (isDragging) {
+                e.preventDefault();
+                currentX = e.clientX - initialX;
+                currentY = e.clientY - initialY;
+                
+                xOffset = currentX;
+                yOffset = currentY;
+                
+                floatingFilter.style.transform = `translate(${currentX}px, ${currentY}px)`;
+            }
+        };
+        
+        // Remove existing listeners
+        header.removeEventListener('mousedown', dragStart);
+        document.removeEventListener('mousemove', drag);
+        document.removeEventListener('mouseup', dragEnd);
+        
+        // Add new listeners
+        header.addEventListener('mousedown', dragStart);
+        document.addEventListener('mousemove', drag);
+        document.addEventListener('mouseup', dragEnd);
+    }
 }
 
 // Global functions for HTML onclick handlers
@@ -1913,6 +2030,19 @@ function closePendingReasonModal() {
 
 function savePendingReason() {
     app.savePendingReason();
+}
+
+// Floating Tag Filter Methods
+function toggleFloatingTagFilter() {
+    app.toggleFloatingTagFilter();
+}
+
+function closeFloatingTagFilter() {
+    app.closeFloatingTagFilter();
+}
+
+function clearAllTagFilters() {
+    app.clearAllTagFilters();
 }
 
 // Initialize the app

@@ -63,6 +63,11 @@
                     </select>
                 </div>
                 <div class="data-actions">
+                    <button id="floatingTagFilterBtn" class="floating-tag-filter-btn" onclick="app.toggleFloatingTagFilter()" title="Floating Tag Filter" style="display: none;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M3 6h18M7 12h10M10 18h4"/>
+                        </svg>
+                    </button>
                     <button class="print-btn" onclick="app.openPrintModal()" title="Print">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <polyline points="6,9 6,3 18,3 18,9"></polyline>
@@ -91,12 +96,11 @@
                         </svg>
                     </button>
                 </div>
-                <button class="add-task-btn" onclick="app.openTaskModal()">
+                <button class="add-task-btn" onclick="app.openTaskModal()" title="Add Task">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <line x1="12" y1="5" x2="12" y2="19"></line>
                         <line x1="5" y1="12" x2="19" y2="12"></line>
                     </svg>
-                    Add Task
                 </button>
             </div>
             <!-- Mobile toolbar -->
@@ -463,6 +467,32 @@
             <div class="form-actions">
                 <button type="button" onclick="app.closePrintModal()">Cancel</button>
                 <button type="button" onclick="app.previewSelected()">Preview</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Floating Tag Filter Window -->
+    <div id="floatingTagFilter" class="floating-tag-filter" style="display: none;">
+        <div class="floating-tag-filter-header">
+            <h3>Tag Filters</h3>
+            <button class="floating-tag-filter-close" onclick="app.closeFloatingTagFilter()" title="Close">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+            </button>
+        </div>
+        <div class="floating-tag-filter-content">
+            <div class="floating-tag-section">
+                <label>Priority Filter:</label>
+                <div class="floating-priority-grid" id="floatingPriorityGrid"></div>
+            </div>
+            <div class="floating-tag-section">
+                <label>Click tags to include/exclude:</label>
+                <div class="floating-tag-grid" id="floatingTagGrid"></div>
+            </div>
+            <div class="floating-tag-actions">
+                <button onclick="app.clearAllFilters()" class="clear-filters-btn">Clear All</button>
             </div>
         </div>
     </div>

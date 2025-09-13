@@ -309,7 +309,7 @@ class DataService {
         if (includeTags.length > 0) {
             filteredTasks = filteredTasks.filter(task => {
                 const taskTags = task.tags || [];
-                return includeTags.every(t => taskTags.includes(t));
+                return includeTags.some(t => taskTags.includes(t));
             });
         }
         

@@ -243,6 +243,14 @@ class TodoApp {
             option.selected = prevExclude.has(tag);
             excludeTagsFilter.appendChild(option);
         });
+        
+        // Update floating tag filter if it exists and is visible
+        if (this.isDesktop()) {
+            const floatingFilter = document.getElementById('floatingTagFilter');
+            if (floatingFilter && floatingFilter.style.display !== 'none') {
+                this.updateFloatingTagFilter();
+            }
+        }
     }
 
     handleSearch(searchTerm) {
@@ -2778,6 +2786,233 @@ class TodoApp {
             } catch(_) {}
         }
     }
+
+    // Floating Tag Filter Methods
+    isDesktop() {
+        return window.matchMedia && window.matchMedia('(min-width: 1024px)').matches;
+    }
+
+    toggleFloatingTagFilter() {
+        if (!this.isDesktop()) return;
+        
+        const floatingFilter = document.getElementById('floatingTagFilter');
+        const isVisible = floatingFilter.style.display !== 'none';
+        
+        if (isVisible) {
+            this.closeFloatingTagFilter();
+        } else {
+            this.openFloatingTagFilter();
+        }
+    }
+
+    openFloatingTagFilter() {
+        if (!this.isDesktop()) return;
+        
+        const floatingFilter = document.getElementById('floatingTagFilter');
+        floatingFilter.style.display = 'block';
+        this.updateFloatingTagFilter();
+        this.makeDraggable();
+    }
+
+    closeFloatingTagFilter() {
+        const floatingFilter = document.getElementById('floatingTagFilter');
+        floatingFilter.style.display = 'none';
+        floatingFilter.classList.remove('minimized');
+    }
+
+    minimizeFloatingTagFilter() {
+        const floatingFilter = document.getElementById('floatingTagFilter');
+        floatingFilter.classList.toggle('minimized');
+    }
+
+    updateFloatingTagFilter() {
+        if (!this.isDesktop()) return;
+        
+        // Update priority grid
+        this.updateFloatingPriorityGrid();
+        
+        // Update tag grid
+        const tagGrid = document.getElementById('floatingTagGrid');
+        if (!tagGrid) return;
+        
+        // Clear existing tags
+        tagGrid.innerHTML = '';
+        
+        // Create clickable tag buttons
+        this.availableTags.forEach(tag => {
+            const tagElement = document.createElement('div');
+            tagElement.className = 'floating-tag-item';
+            tagElement.textContent = tag;
+            
+            // Determine current state and styling
+            if (this.currentIncludeTags.includes(tag)) {
+                tagElement.classList.add('include');
+                tagElement.title = `Click to remove from include filters`;
+            } else if (this.currentExcludeTags.includes(tag)) {
+                tagElement.classList.add('exclude');
+                tagElement.title = `Click to remove from exclude filters`;
+            } else {
+                tagElement.classList.add('neutral');
+                tagElement.title = `Click to include this tag`;
+            }
+            
+            // Add click handler
+            tagElement.addEventListener('click', () => {
+                this.toggleFloatingTag(tag);
+            });
+            
+            tagGrid.appendChild(tagElement);
+        });
+    }
+    
+    updateFloatingPriorityGrid() {
+        const priorityGrid = document.getElementById('floatingPriorityGrid');
+        if (!priorityGrid) return;
+        
+        // Clear existing priorities
+        priorityGrid.innerHTML = '';
+        
+        const priorities = [
+            { value: '', label: 'All' },
+            { value: 'urgent', label: 'Urgent' },
+            { value: 'high', label: 'High' },
+            { value: 'medium', label: 'Medium' },
+            { value: 'low', label: 'Low' }
+        ];
+        
+        // Create clickable priority buttons
+        priorities.forEach(priority => {
+            const priorityElement = document.createElement('div');
+            priorityElement.className = 'floating-priority-item';
+            priorityElement.textContent = priority.label;
+            
+            // Add priority-specific class for styling
+            if (priority.value) {
+                priorityElement.classList.add(priority.value);
+            }
+            
+            // Check if this priority is currently selected
+            if (this.currentPriority === priority.value) {
+                priorityElement.classList.add('active');
+                priorityElement.title = `Click to clear priority filter`;
+            } else {
+                priorityElement.title = `Click to filter by ${priority.label.toLowerCase()} priority`;
+            }
+            
+            // Add click handler
+            priorityElement.addEventListener('click', () => {
+                this.toggleFloatingPriority(priority.value);
+            });
+            
+            priorityGrid.appendChild(priorityElement);
+        });
+    }
+    
+    toggleFloatingTag(tag) {
+        const isIncluded = this.currentIncludeTags.includes(tag);
+        const isExcluded = this.currentExcludeTags.includes(tag);
+        
+        if (isIncluded) {
+            // Remove from include, add to exclude
+            const index = this.currentIncludeTags.indexOf(tag);
+            this.currentIncludeTags.splice(index, 1);
+            this.currentExcludeTags.push(tag);
+        } else if (isExcluded) {
+            // Remove from exclude (back to neutral)
+            const index = this.currentExcludeTags.indexOf(tag);
+            this.currentExcludeTags.splice(index, 1);
+        } else {
+            // Add to include (remove from exclude if it was there)
+            const excludeIndex = this.currentExcludeTags.indexOf(tag);
+            if (excludeIndex > -1) {
+                this.currentExcludeTags.splice(excludeIndex, 1);
+            }
+            this.currentIncludeTags.push(tag);
+        }
+        
+        // Update UI and refresh tasks
+        this.updateFloatingTagFilter();
+        this.syncUIState();
+        this.loadTasks();
+    }
+
+    toggleFloatingPriority(priority) {
+        // Toggle priority - if same priority clicked, clear it
+        if (this.currentPriority === priority) {
+            this.currentPriority = '';
+        } else {
+            this.currentPriority = priority;
+        }
+        
+        // Update UI and refresh tasks
+        this.updateFloatingTagFilter();
+        this.syncUIState();
+        this.loadTasks();
+    }
+
+    clearAllFilters() {
+        this.currentIncludeTags = [];
+        this.currentExcludeTags = [];
+        this.currentPriority = '';
+        this.updateFloatingTagFilter();
+        this.syncUIState();
+        this.loadTasks();
+    }
+
+    makeDraggable() {
+        const floatingFilter = document.getElementById('floatingTagFilter');
+        if (!floatingFilter) return;
+        
+        let isDragging = false;
+        let currentX;
+        let currentY;
+        let initialX;
+        let initialY;
+        let xOffset = 0;
+        let yOffset = 0;
+        
+        const header = floatingFilter.querySelector('.floating-filter-header');
+        
+        header.addEventListener('mousedown', dragStart);
+        document.addEventListener('mousemove', drag);
+        document.addEventListener('mouseup', dragEnd);
+        
+        function dragStart(e) {
+            initialX = e.clientX - xOffset;
+            initialY = e.clientY - yOffset;
+            
+            if (e.target === header || header.contains(e.target)) {
+                isDragging = true;
+            }
+        }
+        
+        function drag(e) {
+            if (isDragging) {
+                e.preventDefault();
+                currentX = e.clientX - initialX;
+                currentY = e.clientY - initialY;
+                
+                xOffset = currentX;
+                yOffset = currentY;
+                
+                // Keep window within viewport bounds
+                const maxX = window.innerWidth - floatingFilter.offsetWidth;
+                const maxY = window.innerHeight - floatingFilter.offsetHeight;
+                const minY = 20; // Keep at least 20px from top of screen
+                
+                currentX = Math.max(0, Math.min(currentX, maxX));
+                currentY = Math.max(minY, Math.min(currentY, maxY));
+                
+                floatingFilter.style.transform = `translate(${currentX}px, ${currentY}px)`;
+            }
+        }
+        
+        function dragEnd() {
+            initialX = currentX;
+            initialY = currentY;
+            isDragging = false;
+        }
+    }
 }
 
 // Global functions for HTML onclick handlers
@@ -2801,6 +3036,31 @@ function closePendingReasonModal() {
 
 function addNote() {
     app.addNote();
+}
+
+// Floating Tag Filter Functions
+function toggleFloatingTagFilter() {
+    if (window.app) {
+        app.toggleFloatingTagFilter();
+    }
+}
+
+function minimizeFloatingTagFilter() {
+    if (window.app) {
+        app.minimizeFloatingTagFilter();
+    }
+}
+
+function closeFloatingTagFilter() {
+    if (window.app) {
+        app.closeFloatingTagFilter();
+    }
+}
+
+function clearAllFilters() {
+    if (window.app) {
+        app.clearAllFilters();
+    }
 }
 
 // Initialize app when DOM is loaded
