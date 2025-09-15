@@ -151,8 +151,22 @@ class TodoApp {
         }
     }
 
-    async loadTasks(priority = null, sortBy = null, search = null, includeTags = null, excludeTags = null) {
+    async loadTasks(priority = null, sortBy = null, search = null, includeTags = null, excludeTags = null, forceRefresh = false) {
         try {
+            // Check if user is actively typing in an input field
+            const activeElement = document.activeElement;
+            const isTypingInInput = activeElement && (
+                activeElement.tagName === 'INPUT' || 
+                activeElement.tagName === 'TEXTAREA' ||
+                activeElement.contentEditable === 'true'
+            );
+            
+            // If user is typing and this isn't a forced refresh, skip the refresh
+            if (isTypingInInput && !forceRefresh) {
+                console.log('Skipping UI refresh - user is typing in input field');
+                return;
+            }
+            
             // Use provided values or keep current state
             if (priority !== null) this.currentPriority = priority;
             if (sortBy !== null) this.currentSortBy = sortBy;
@@ -1131,7 +1145,7 @@ class TodoApp {
     async updateTaskStatus(taskId, newStatus, pendingReason = null) {
         try {
             await window.dataService.updateTaskStatus(taskId, newStatus, pendingReason);
-            await this.loadTasks();
+            await this.loadTasks(null, null, null, null, null, true); // Force refresh after status change
         } catch (error) {
             console.error('Error updating task status:', error);
         }
@@ -1292,7 +1306,7 @@ class TodoApp {
             }
 
             await this.loadTags();
-            await this.loadTasks();
+            await this.loadTasks(null, null, null, null, null, true); // Force refresh after task save
             this.closeTaskModal();
         } catch (error) {
             console.error('Error saving task:', error);
@@ -1763,25 +1777,11 @@ class TodoApp {
         }
     }
 
-    async addSubtaskFromInput(taskId) {
-        const input = document.getElementById(`new-subtask-${taskId}`);
-        const title = input.value.trim();
-        
-        if (!title) return;
-        
-        try {
-            await window.dataService.createSubtask(taskId, title);
-            input.value = '';
-            await this.loadTasks(); // Refresh to show new subtask
-        } catch (error) {
-            console.error('Error adding subtask:', error);
-        }
-    }
 
     async toggleSubtask(subtaskId) {
         try {
             await window.dataService.toggleSubtask(subtaskId);
-            await this.loadTasks(); // Refresh to show updated state
+            await this.loadTasks(null, null, null, null, null, true); // Force refresh to show updated state
         } catch (error) {
             console.error('Error toggling subtask:', error);
         }
@@ -1790,12 +1790,12 @@ class TodoApp {
     async editSubtask(subtaskId, currentTitle) {
         const newTitle = prompt('Edit subtask:', currentTitle);
         if (newTitle && newTitle.trim() !== currentTitle) {
-            try {
-                await window.dataService.updateSubtask(subtaskId, { title: newTitle.trim() });
-                await this.loadTasks();
-            } catch (error) {
-                console.error('Error updating subtask:', error);
-            }
+        try {
+            await window.dataService.updateSubtask(subtaskId, { title: newTitle.trim() });
+            await this.loadTasks(null, null, null, null, null, true); // Force refresh after edit
+        } catch (error) {
+            console.error('Error updating subtask:', error);
+        }
         }
     }
 
@@ -1804,7 +1804,7 @@ class TodoApp {
         
         try {
             await window.dataService.deleteSubtask(subtaskId);
-            await this.loadTasks();
+            await this.loadTasks(null, null, null, null, null, true); // Force refresh after delete
         } catch (error) {
             console.error('Error deleting subtask:', error);
         }
@@ -1913,7 +1913,7 @@ class TodoApp {
 
         try {
             await window.dataService.createSubtask(taskId, title.trim());
-            await this.loadTasks();
+            await this.loadTasks(null, null, null, null, null, true); // Force refresh after adding
         } catch (error) {
             console.error('Error adding subtask:', error);
         }
@@ -1928,7 +1928,9 @@ class TodoApp {
         try {
             await window.dataService.createSubtask(taskId, title);
             input.value = '';
-            await this.loadTasks();
+            // Clear focus from input to allow refresh
+            input.blur();
+            await this.loadTasks(null, null, null, null, null, true); // Force refresh to show new subtask
         } catch (error) {
             console.error('Error adding subtask:', error);
         }
@@ -1949,7 +1951,7 @@ class TodoApp {
 
         try {
             await window.dataService.updateSubtask(subtaskId, { title: newTitle.trim() });
-            await this.loadTasks();
+            await this.loadTasks(null, null, null, null, null, true); // Force refresh after edit
         } catch (error) {
             console.error('Error updating subtask:', error);
         }
@@ -1960,7 +1962,7 @@ class TodoApp {
 
         try {
             await window.dataService.deleteSubtask(subtaskId);
-            await this.loadTasks();
+            await this.loadTasks(null, null, null, null, null, true); // Force refresh after delete
         } catch (error) {
             console.error('Error deleting subtask:', error);
         }
@@ -2810,6 +2812,10 @@ class TodoApp {
         
         const floatingFilter = document.getElementById('floatingTagFilter');
         floatingFilter.style.display = 'block';
+        
+        // Restore saved position
+        this.restoreFloatingFilterPosition();
+        
         this.updateFloatingTagFilter();
         this.makeDraggable();
     }
@@ -2818,6 +2824,9 @@ class TodoApp {
         const floatingFilter = document.getElementById('floatingTagFilter');
         floatingFilter.style.display = 'none';
         floatingFilter.classList.remove('minimized');
+        
+        // Save current position before closing
+        this.saveFloatingFilterPosition();
     }
 
     minimizeFloatingTagFilter() {
@@ -2959,6 +2968,54 @@ class TodoApp {
         this.loadTasks();
     }
 
+    saveFloatingFilterPosition() {
+        const floatingFilter = document.getElementById('floatingTagFilter');
+        if (!floatingFilter) return;
+        
+        // Get current position from transform or default position
+        const transform = floatingFilter.style.transform;
+        let x = 0, y = 0;
+        
+        if (transform && transform !== 'none') {
+            const matches = transform.match(/translate\(([^,]+)px,\s*([^)]+)px\)/);
+            if (matches) {
+                x = parseInt(matches[1]) || 0;
+                y = parseInt(matches[2]) || 0;
+            }
+        }
+        
+        // Save to localStorage
+        try {
+            localStorage.setItem('floatingFilterPosition', JSON.stringify({ x, y }));
+        } catch (error) {
+            console.warn('Could not save floating filter position:', error);
+        }
+    }
+
+    restoreFloatingFilterPosition() {
+        const floatingFilter = document.getElementById('floatingTagFilter');
+        if (!floatingFilter) return;
+        
+        try {
+            const saved = localStorage.getItem('floatingFilterPosition');
+            if (saved) {
+                const { x, y } = JSON.parse(saved);
+                
+                // Validate position is within bounds
+                const maxX = window.innerWidth - floatingFilter.offsetWidth;
+                const maxY = window.innerHeight - floatingFilter.offsetHeight;
+                const minY = 20;
+                
+                const validX = Math.max(0, Math.min(x, maxX));
+                const validY = Math.max(minY, Math.min(y, maxY));
+                
+                floatingFilter.style.transform = `translate(${validX}px, ${validY}px)`;
+            }
+        } catch (error) {
+            console.warn('Could not restore floating filter position:', error);
+        }
+    }
+
     makeDraggable() {
         const floatingFilter = document.getElementById('floatingTagFilter');
         if (!floatingFilter) return;
@@ -2971,26 +3028,52 @@ class TodoApp {
         let xOffset = 0;
         let yOffset = 0;
         
-        const header = floatingFilter.querySelector('.floating-filter-header');
+        const header = floatingFilter.querySelector('.floating-tag-filter-header');
         
+        // Mouse events
         header.addEventListener('mousedown', dragStart);
         document.addEventListener('mousemove', drag);
         document.addEventListener('mouseup', dragEnd);
         
+        // Touch events
+        header.addEventListener('touchstart', dragStart, { passive: false });
+        document.addEventListener('touchmove', drag, { passive: false });
+        document.addEventListener('touchend', dragEnd);
+        
         function dragStart(e) {
-            initialX = e.clientX - xOffset;
-            initialY = e.clientY - yOffset;
+            // Prevent text selection
+            e.preventDefault();
+            e.stopPropagation();
             
-            if (e.target === header || header.contains(e.target)) {
+            // Get coordinates from mouse or touch
+            const clientX = e.clientX || (e.touches && e.touches[0].clientX);
+            const clientY = e.clientY || (e.touches && e.touches[0].clientY);
+            
+            // Only start dragging if clicking/touching on the header (not buttons)
+            if (e.target === header || (header.contains(e.target) && !e.target.closest('button'))) {
                 isDragging = true;
+                floatingFilter.classList.add('dragging');
+                
+                // Prevent text selection globally during drag
+                document.body.style.userSelect = 'none';
+                document.body.style.webkitUserSelect = 'none';
+                
+                initialX = clientX - xOffset;
+                initialY = clientY - yOffset;
             }
         }
         
         function drag(e) {
             if (isDragging) {
                 e.preventDefault();
-                currentX = e.clientX - initialX;
-                currentY = e.clientY - initialY;
+                e.stopPropagation();
+                
+                // Get coordinates from mouse or touch
+                const clientX = e.clientX || (e.touches && e.touches[0].clientX);
+                const clientY = e.clientY || (e.touches && e.touches[0].clientY);
+                
+                currentX = clientX - initialX;
+                currentY = clientY - initialY;
                 
                 xOffset = currentX;
                 yOffset = currentY;
@@ -3008,10 +3091,25 @@ class TodoApp {
         }
         
         function dragEnd() {
-            initialX = currentX;
-            initialY = currentY;
-            isDragging = false;
+            if (isDragging) {
+                initialX = currentX;
+                initialY = currentY;
+                isDragging = false;
+                
+                // Remove dragging class and restore text selection
+                floatingFilter.classList.remove('dragging');
+                document.body.style.userSelect = '';
+                document.body.style.webkitUserSelect = '';
+                
+                // Save position after dragging stops
+                app.saveFloatingFilterPosition();
+            }
         }
+        
+        // Also save position on window resize to keep it valid
+        window.addEventListener('resize', () => {
+            app.saveFloatingFilterPosition();
+        });
     }
 }
 
