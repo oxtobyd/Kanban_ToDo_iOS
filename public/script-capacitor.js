@@ -122,21 +122,11 @@ class TodoApp {
                 syncBtn.disabled = true;
             }
 
-            // Use the iCloud sync service to check for updates
-            if (window.iCloudSync) {
-                const currentData = await window.dataService.exportData();
-                const syncResult = await window.iCloudSync.checkForUpdates(currentData.data);
-                
-                if (syncResult.hasUpdates) {
-                    console.log('Updates found, importing from iCloud...');
-                    await window.dataService.importData({ data: syncResult.data }, { clearExisting: true });
-                    await this.loadTasks();
-                    console.log('Manual sync completed - data updated');
-                } else {
-                    console.log('No updates found in iCloud');
-                }
+            // Delegate to centralized data service manual sync, which uses the proper iCloud plugin
+            if (window.dataService && window.dataService.manualSync) {
+                await window.dataService.manualSync();
             } else {
-                console.error('iCloud sync service not available');
+                console.error('Data service manualSync not available');
             }
 
         } catch (error) {

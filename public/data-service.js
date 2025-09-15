@@ -211,6 +211,14 @@ class DataService {
 
                 const success = await window.iCloudSyncProper.saveToiCloud(exportData.data);
                 console.log('Proper iCloud save result:', success);
+                // After a successful save, update last sync time for accurate comparisons
+                try {
+                    if (success && exportData && exportData.exported_at) {
+                        this.setLastSyncTime(exportData.exported_at);
+                    } else {
+                        this.setLastSyncTime(new Date().toISOString());
+                    }
+                } catch (_) {}
             } else {
                 console.log('Proper iCloud sync service not available');
             }
