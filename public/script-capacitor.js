@@ -355,6 +355,7 @@ class TodoApp {
         const createdDate = new Date(task.created_at).toLocaleDateString();
         const priorityClass = `priority-${task.priority || 'medium'}`;
         const priorityLabel = this.getPriorityLabel(task.priority || 'medium');
+        const isExpanded = this.expandedTasks && this.expandedTasks.has(task.id);
         
         // Make URLs clickable and highlight search terms
         let title = this.makeUrlsClickable(task.title);
@@ -382,7 +383,7 @@ class TodoApp {
         const subtasksHTML = await this.renderSubtasks(task.id);
         
         return `
-            <div class="task-card ${priorityClass}" draggable="true" data-task-id="${task.id}">
+            <div class="task-card ${priorityClass} ${isExpanded ? 'expanded' : ''}" draggable="true" data-task-id="${task.id}">
                 <div class="task-header">
                     <div class="task-title" onclick="app.toggleTaskExpansion(${task.id})" title="Click to expand/collapse task details">${title}</div>
                     <div class="task-header-actions">
@@ -1330,18 +1331,18 @@ class TodoApp {
 
     toggleTaskExpansion(taskId) {
         const taskCard = document.querySelector(`[data-task-id="${taskId}"]`);
-        const expandBtn = taskCard.querySelector('.task-expand-btn');
+        const expandBtn = taskCard ? taskCard.querySelector('.task-expand-btn') : null;
         
         if (this.expandedTasks.has(taskId)) {
             // Collapse the task
             this.expandedTasks.delete(taskId);
-            taskCard.classList.remove('expanded');
-            expandBtn.classList.remove('expanded');
+            if (taskCard) taskCard.classList.remove('expanded');
+            if (expandBtn) expandBtn.classList.remove('expanded');
         } else {
             // Expand the task
             this.expandedTasks.add(taskId);
-            taskCard.classList.add('expanded');
-            expandBtn.classList.add('expanded');
+            if (taskCard) taskCard.classList.add('expanded');
+            if (expandBtn) expandBtn.classList.add('expanded');
         }
     }
 
