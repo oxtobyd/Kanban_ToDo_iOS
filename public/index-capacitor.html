@@ -21,8 +21,8 @@
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <div class="app">
-        <header class="header">
+    <div class="app" role="application">
+        <header class="header" role="banner">
             <div class="header-logo">
                 <img src="logo.svg" alt="Todo Kanban" class="logo">
             </div>
@@ -63,6 +63,11 @@
                     </select>
                 </div>
                 <div class="data-actions">
+                    <button class="print-btn" id="themeToggleBtn" onclick="app.toggleTheme()" title="Toggle theme" aria-label="Toggle theme">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                        </svg>
+                    </button>
                     <button id="floatingTagFilterBtn" class="floating-tag-filter-btn" onclick="app.toggleFloatingTagFilter()" title="Floating Tag Filter" style="display: none;">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M3 6h18M7 12h10M10 18h4"/>
@@ -104,7 +109,7 @@
                 </button>
             </div>
             <!-- Mobile toolbar -->
-            <div class="mobile-toolbar" id="mobileToolbar" style="display:none;">
+            <div class="mobile-toolbar" id="mobileToolbar" style="display:none;" role="toolbar" aria-label="Mobile toolbar">
                 <button class="mt-btn" onclick="app.toggleMobileSearch()" aria-label="Search">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <circle cx="11" cy="11" r="8"></circle>
@@ -122,18 +127,18 @@
             </div>
         </header>
 
-        <main class="kanban-board">
-            <div class="column" data-status="todo">
+        <main class="kanban-board" role="main">
+            <div class="column" data-status="todo" role="region" aria-labelledby="col-title-todo">
                 <div class="column-header">
-                    <h2>
+                    <h2 id="col-title-todo">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <circle cx="12" cy="12" r="10"></circle>
                         </svg>
                         To Do
                     </h2>
                     <div class="column-controls">
-                        <span class="task-count">0</span>
-                        <button class="collapse-toggle" data-status="todo" title="Collapse/Expand tasks">
+                        <span class="task-count" aria-live="polite">0</span>
+                        <button class="collapse-toggle" data-status="todo" title="Collapse/Expand tasks" aria-expanded="true" aria-controls="todo-list">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <polyline points="6,9 12,15 18,9"></polyline>
                             </svg>
@@ -141,12 +146,12 @@
                     </div>
                 </div>
 
-                <div class="task-list" id="todo-list"></div>
+                <div class="task-list" id="todo-list" role="list" aria-label="To Do tasks"></div>
             </div>
 
-            <div class="column" data-status="in_progress">
+            <div class="column" data-status="in_progress" role="region" aria-labelledby="col-title-in-progress">
                 <div class="column-header">
-                    <h2>
+                    <h2 id="col-title-in-progress">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <circle cx="12" cy="12" r="10"></circle>
                             <polyline points="12,6 12,12 16,14"></polyline>
@@ -154,20 +159,20 @@
                         In Progress
                     </h2>
                     <div class="column-controls">
-                        <span class="task-count">0</span>
-                        <button class="collapse-toggle" data-status="in_progress" title="Collapse/Expand tasks">
+                        <span class="task-count" aria-live="polite">0</span>
+                        <button class="collapse-toggle" data-status="in_progress" title="Collapse/Expand tasks" aria-expanded="true" aria-controls="in_progress-list">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <polyline points="6,9 12,15 18,9"></polyline>
                             </svg>
                         </button>
                     </div>
                 </div>
-                <div class="task-list" id="in_progress-list"></div>
+                <div class="task-list" id="in_progress-list" role="list" aria-label="In Progress tasks"></div>
             </div>
 
-            <div class="column" data-status="pending">
+            <div class="column" data-status="pending" role="region" aria-labelledby="col-title-pending">
                 <div class="column-header">
-                    <h2>
+                    <h2 id="col-title-pending">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <circle cx="12" cy="12" r="10"></circle>
                             <line x1="12" y1="8" x2="12" y2="12"></line>
@@ -176,20 +181,20 @@
                         Pending
                     </h2>
                     <div class="column-controls">
-                        <span class="task-count">0</span>
-                        <button class="collapse-toggle" data-status="pending" title="Collapse/Expand tasks">
+                        <span class="task-count" aria-live="polite">0</span>
+                        <button class="collapse-toggle" data-status="pending" title="Collapse/Expand tasks" aria-expanded="true" aria-controls="pending-list">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <polyline points="6,9 12,15 18,9"></polyline>
                             </svg>
                         </button>
                     </div>
                 </div>
-                <div class="task-list" id="pending-list"></div>
+                <div class="task-list" id="pending-list" role="list" aria-label="Pending tasks"></div>
             </div>
 
-            <div class="column" data-status="done">
+            <div class="column" data-status="done" role="region" aria-labelledby="col-title-done">
                 <div class="column-header">
-                    <h2>
+                    <h2 id="col-title-done">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="m9 12 2 2 4-4"></path>
                             <circle cx="12" cy="12" r="10"></circle>
@@ -197,25 +202,25 @@
                         Done
                     </h2>
                     <div class="column-controls">
-                        <span class="task-count">0</span>
-                        <button class="collapse-toggle" data-status="done" title="Collapse/Expand tasks">
+                        <span class="task-count" aria-live="polite">0</span>
+                        <button class="collapse-toggle" data-status="done" title="Collapse/Expand tasks" aria-expanded="true" aria-controls="done-list">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <polyline points="6,9 12,15 18,9"></polyline>
                             </svg>
                         </button>
                     </div>
                 </div>
-                <div class="task-list" id="done-list"></div>
+                <div class="task-list" id="done-list" role="list" aria-label="Done tasks"></div>
             </div>
         </main>
     </div>
 
     <!-- Mobile bottom segmented control -->
-    <div class="mobile-bottom-bar" id="mobileBottomBar" style="display:none;">
-        <button class="mobile-segment" data-col="todo" onclick="app.setMobileColumn('todo')">To Do</button>
-        <button class="mobile-segment" data-col="in_progress" onclick="app.setMobileColumn('in_progress')">In Progress</button>
-        <button class="mobile-segment" data-col="pending" onclick="app.setMobileColumn('pending')">Pending</button>
-        <button class="mobile-segment" data-col="done" onclick="app.setMobileColumn('done')">Done</button>
+    <div class="mobile-bottom-bar" id="mobileBottomBar" style="display:none;" role="tablist" aria-label="Kanban columns">
+        <button class="mobile-segment" data-col="todo" role="tab" aria-selected="true" aria-controls="todo-list" onclick="app.setMobileColumn('todo')">To Do</button>
+        <button class="mobile-segment" data-col="in_progress" role="tab" aria-selected="false" aria-controls="in_progress-list" onclick="app.setMobileColumn('in_progress')">In Progress</button>
+        <button class="mobile-segment" data-col="pending" role="tab" aria-selected="false" aria-controls="pending-list" onclick="app.setMobileColumn('pending')">Pending</button>
+        <button class="mobile-segment" data-col="done" role="tab" aria-selected="false" aria-controls="done-list" onclick="app.setMobileColumn('done')">Done</button>
     </div>
 
     <!-- Mobile floating Add Task button -->
@@ -255,11 +260,11 @@
     </div>
 
     <!-- Task Modal -->
-    <div class="modal" id="taskModal">
+    <div class="modal" id="taskModal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
         <div class="modal-content">
             <div class="modal-header">
                 <h3 id="modalTitle">Add New Task</h3>
-                <button class="close-btn" onclick="app.closeTaskModal()">&times;</button>
+                <button class="close-btn" aria-label="Close" onclick="app.closeTaskModal()">&times;</button>
             </div>
             <form id="taskForm">
                 <div class="form-group">
@@ -309,11 +314,11 @@
     </div>
 
     <!-- Notes Modal -->
-    <div class="modal" id="notesModal">
+    <div class="modal" id="notesModal" role="dialog" aria-modal="true" aria-labelledby="notesModalTitle">
         <div class="modal-content">
             <div class="modal-header">
-                <h3>Task Notes</h3>
-                <button class="close-btn" onclick="app.closeNotesModal()">&times;</button>
+                <h3 id="notesModalTitle">Task Notes</h3>
+                <button class="close-btn" aria-label="Close" onclick="app.closeNotesModal()">&times;</button>
             </div>
             <div class="notes-container">
                 <div class="add-note">
@@ -326,11 +331,11 @@
     </div>
 
     <!-- Pending Reason Modal -->
-    <div class="modal" id="pendingReasonModal">
+    <div class="modal" id="pendingReasonModal" role="dialog" aria-modal="true" aria-labelledby="pendingReasonTitle">
         <div class="modal-content">
             <div class="modal-header">
-                <h3>Pending Reason</h3>
-                <button class="close-btn" onclick="app.closePendingReasonModal()">&times;</button>
+                <h3 id="pendingReasonTitle">Pending Reason</h3>
+                <button class="close-btn" aria-label="Close" onclick="app.closePendingReasonModal()">&times;</button>
             </div>
             <div class="pending-reason-form">
                 <p>Why is this task pending?</p>
@@ -369,11 +374,11 @@
     <script src="sync-debug.js"></script>
     
     <!-- Import Modal -->
-    <div class="modal" id="importModal">
+    <div class="modal" id="importModal" role="dialog" aria-modal="true" aria-labelledby="importModalTitle">
         <div class="modal-content">
             <div class="modal-header">
-                <h3>Import Data</h3>
-                <button class="close-btn" onclick="app.closeImportModal()">&times;</button>
+                <h3 id="importModalTitle">Import Data</h3>
+                <button class="close-btn" aria-label="Close" onclick="app.closeImportModal()">&times;</button>
             </div>
             <div class="import-container">
                 <div class="import-options">
@@ -444,11 +449,11 @@
     <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
     
     <!-- Print Modal -->
-    <div class="modal" id="printModal" style="display:none;">
+    <div class="modal" id="printModal" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="printModalTitle">
         <div class="modal-content">
             <div class="modal-header">
-                <h3>Print Tasks</h3>
-                <button class="close-btn" onclick="app.closePrintModal()">&times;</button>
+                <h3 id="printModalTitle">Print Tasks</h3>
+                <button class="close-btn" aria-label="Close" onclick="app.closePrintModal()">&times;</button>
             </div>
             <div class="form-group">
                 <label>Select columns to include</label>
@@ -472,9 +477,9 @@
     </div>
 
     <!-- Floating Tag Filter Window -->
-    <div id="floatingTagFilter" class="floating-tag-filter" style="display: none;">
+    <div id="floatingTagFilter" class="floating-tag-filter" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="floatingTagFilterTitle">
         <div class="floating-tag-filter-header">
-            <h3>Tag Filters</h3>
+            <h3 id="floatingTagFilterTitle">Tag Filters</h3>
             <button class="floating-tag-filter-close" onclick="app.closeFloatingTagFilter()" title="Close">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <line x1="18" y1="6" x2="6" y2="18"></line>

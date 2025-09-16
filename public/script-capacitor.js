@@ -34,6 +34,28 @@ class TodoApp {
         this.expandedTasks = new Set();
     }
 
+    setupNotesInteractions() {
+        const list = document.getElementById('notesList');
+        if (!list) return;
+        list.addEventListener('click', (e) => {
+            const editBtn = e.target.closest && (e.target.closest('.edit-note-btn') || e.target.closest('.note-edit-btn'));
+            if (editBtn) {
+                const item = e.target.closest('.note-item');
+                if (!item) return;
+                const noteId = parseInt(item.getAttribute('data-note-id'), 10);
+                if (!Number.isFinite(noteId)) return;
+                // Prefer inline edit UI if available; fallback to prompt-based version
+                if (typeof this.editNote === 'function' && this.editNote.length === 1) {
+                    this.editNote(noteId);
+                } else {
+                    const contentEl = item.querySelector(`#note-content-${noteId}`);
+                    const current = contentEl ? contentEl.textContent : '';
+                    this.editNote(noteId, current);
+                }
+            }
+        });
+    }
+
     async init() {
         // Wait for Capacitor to be ready
         if (window.Capacitor) {
@@ -51,10 +73,21 @@ class TodoApp {
             }
         }
 
+        // Prepare Haptics plugin if present
+        this.haptics = (window.Capacitor && (window.Capacitor.Plugins && (window.Capacitor.Plugins.Haptics || window.Capacitor.Plugins.HapticsPlugin))) || null;
+
         // Initialize data service
         await window.dataService.init();
         // Bust any cached assets by appending a cache-busting param to fetches if needed
         
+        // Apply saved theme
+        try {
+            const savedTheme = localStorage.getItem('ui-theme');
+            if (savedTheme === 'dark' || savedTheme === 'light') {
+                document.body.setAttribute('data-theme', savedTheme);
+            }
+        } catch (_) {}
+
         await this.loadTags();
         await this.loadTasks();
         this.setupEventListeners();
@@ -62,9 +95,11 @@ class TodoApp {
         this.setupTouchGestures();
         this.setupTagsInput();
         this.setupFileDragAndDrop();
+        this.setupNotesInteractions();
         this.applyColumnStates();
         this.syncUIState();
         this.setupMobileUI();
+        this.updateThemeToggleVisual();
         // Inject a style to disable text selection while dragging
         if (!document.getElementById('no-text-select-style')) {
             const style = document.createElement('style');
@@ -79,6 +114,35 @@ class TodoApp {
             `;
             document.head.appendChild(style);
         }
+    }
+
+    toggleTheme() {
+        const current = document.body.getAttribute('data-theme') || 'light';
+        const next = current === 'dark' ? 'light' : 'dark';
+        document.body.setAttribute('data-theme', next);
+        try { localStorage.setItem('ui-theme', next); } catch (_) {}
+        this.updateThemeToggleVisual();
+        this.hapticImpact('light');
+    }
+
+    updateThemeToggleVisual() {
+        const btn = document.getElementById('themeToggleBtn');
+        if (!btn) return;
+        const theme = document.body.getAttribute('data-theme') || 'light';
+        btn.setAttribute('aria-pressed', theme === 'dark' ? 'true' : 'false');
+        btn.title = theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode';
+    }
+
+    async hapticImpact(style = 'medium') {
+        try {
+            const H = (this.haptics || (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Haptics));
+            if (!H) return;
+            if (H.impact) {
+                await H.impact({ style: style.toUpperCase() });
+            } else if (H.selectionChanged) {
+                await H.selectionChanged();
+            }
+        } catch (_) {}
     }
 
     toggleMobileSearch() {
@@ -682,6 +746,56 @@ class TodoApp {
                 const status = e.target.closest('.collapse-toggle').dataset.status;
                 this.toggleColumnCollapse(status);
             });
+        });
+
+        // Global Escape-to-close modals
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                this.closeTaskModal();
+                this.closeNotesModal();
+                this.closePendingReasonModal();
+                this.closePrintModal && this.closePrintModal();
+                const mobileSearch = document.getElementById('mobileSearch');
+                if (mobileSearch && mobileSearch.style.display !== 'none') {
+                    this.toggleMobileSearch();
+                }
+            }
+            // Arrow key navigation for bottom tabs on mobile
+            if (window.matchMedia && window.matchMedia('(max-width: 768px)').matches) {
+                const order = ['todo','in_progress','pending','done'];
+                const idx = order.indexOf(this.mobileColumn);
+                if (e.key === 'ArrowRight') {
+                    const next = order[(idx + 1) % order.length];
+                    this.setMobileColumn(next);
+                } else if (e.key === 'ArrowLeft') {
+                    const prev = order[(idx - 1 + order.length) % order.length];
+                    this.setMobileColumn(prev);
+                }
+            }
+        });
+
+        // Tab semantics for mobile bottom bar
+        const tabList = document.getElementById('mobileBottomBar');
+        if (tabList) {
+            tabList.addEventListener('click', (e) => {
+                const btn = e.target.closest('.mobile-segment');
+                if (!btn) return;
+                const col = btn.getAttribute('data-col');
+                this.setMobileColumn(col);
+                this.updateAriaForTabs();
+            });
+        }
+
+        // Initialize ARIA selected states
+        this.updateAriaForTabs();
+    }
+
+    updateAriaForTabs() {
+        const tabs = document.querySelectorAll('.mobile-segment[role="tab"]');
+        tabs.forEach(tab => {
+            const selected = tab.getAttribute('data-col') === this.mobileColumn;
+            tab.setAttribute('aria-selected', selected ? 'true' : 'false');
+            tab.tabIndex = selected ? 0 : -1;
         });
     }
 
@@ -1319,11 +1433,18 @@ class TodoApp {
     }
 
     async deleteTask(taskId) {
-        if (!confirm('Are you sure you want to delete this task?')) return;
-
+        // Optimistic delete with undo snackbar
         try {
+            const task = await window.dataService.getTask(taskId);
             await window.dataService.deleteTask(taskId);
             await this.loadTasks();
+            this.hapticImpact('light');
+            this.showUndoToast('Task deleted', async () => {
+                try {
+                    await window.dataService.createTask(task);
+                    await this.loadTasks();
+                } catch (_) {}
+            });
         } catch (error) {
             console.error('Error deleting task:', error);
         }
@@ -1553,6 +1674,52 @@ class TodoApp {
         // Setup file drag and drop for notes
         const noteTextarea = document.getElementById('newNote');
         if (noteTextarea) {
+            // Auto-decode on input as a fallback where 'paste' may not fire
+            noteTextarea.addEventListener('input', () => {
+                this.maybeAutoDecodeTextareaValue(noteTextarea);
+            });
+            // Decode percent-encoded text on paste (e.g., subject:%20RE%3A...)
+            noteTextarea.addEventListener('paste', (e) => {
+                try {
+                    const preValue = noteTextarea.value;
+                    const preStart = noteTextarea.selectionStart;
+                    const preEnd = noteTextarea.selectionEnd;
+                    const clipboard = (e.clipboardData && e.clipboardData.getData) ? e.clipboardData.getData('text/plain') : '';
+                    if (clipboard) {
+                        const decoded = this.safeDecodeIfEncoded(clipboard);
+                        if (decoded !== clipboard) {
+                            e.preventDefault();
+                            const before = preValue.substring(0, preStart);
+                            const after = preValue.substring(preEnd);
+                            noteTextarea.value = before + decoded + after;
+                            const caret = preStart + decoded.length;
+                            noteTextarea.selectionStart = noteTextarea.selectionEnd = caret;
+                            noteTextarea.dispatchEvent(new Event('input', { bubbles: true }));
+                            return;
+                        }
+                    }
+                    // Fallback: let paste happen, then decode the newly inserted segment
+                    setTimeout(() => {
+                        try {
+                            const postValue = noteTextarea.value;
+                            const postCaret = noteTextarea.selectionStart;
+                            // Estimate inserted range
+                            const insertedEnd = postCaret;
+                            const insertedStart = Math.min(insertedEnd, preStart + Math.max(0, postValue.length - (preValue.length - (preEnd - preStart))));
+                            const before = postValue.substring(0, insertedStart);
+                            const inserted = postValue.substring(insertedStart, insertedEnd);
+                            const after = postValue.substring(insertedEnd);
+                            const decodedInserted = this.safeDecodeIfEncoded(inserted);
+                            if (decodedInserted !== inserted) {
+                                noteTextarea.value = before + decodedInserted + after;
+                                const caret = before.length + decodedInserted.length;
+                                noteTextarea.selectionStart = noteTextarea.selectionEnd = caret;
+                                noteTextarea.dispatchEvent(new Event('input', { bubbles: true }));
+                            }
+                        } catch (_) {}
+                    }, 0);
+                } catch (_) {}
+            });
             noteTextarea.addEventListener('dragover', (e) => {
                 e.preventDefault();
                 e.dataTransfer.dropEffect = 'copy';
@@ -1697,6 +1864,100 @@ class TodoApp {
                 }
             });
         }
+
+        // Also handle paste for dynamically created edit note textareas
+        document.addEventListener('paste', (e) => {
+            const target = e.target;
+            if (!target || target.tagName !== 'TEXTAREA') return;
+            if (!(target.id === 'newNote' || (target.classList && target.classList.contains('edit-note-textarea')))) return;
+            try {
+                const preValue = target.value;
+                const preStart = target.selectionStart;
+                const preEnd = target.selectionEnd;
+                const clipboard = (e.clipboardData && e.clipboardData.getData) ? e.clipboardData.getData('text/plain') : '';
+                if (clipboard) {
+                    const decoded = this.safeDecodeIfEncoded(clipboard);
+                    if (decoded !== clipboard) {
+                        e.preventDefault();
+                        const before = preValue.substring(0, preStart);
+                        const after = preValue.substring(preEnd);
+                        target.value = before + decoded + after;
+                        const caret = preStart + decoded.length;
+                        target.selectionStart = target.selectionEnd = caret;
+                        target.dispatchEvent(new Event('input', { bubbles: true }));
+                        return;
+                    }
+                }
+                // Fallback for environments without clipboardData
+                setTimeout(() => {
+                    try {
+                        const postValue = target.value;
+                        const postCaret = target.selectionStart;
+                        const insertedEnd = postCaret;
+                        const insertedStart = Math.min(insertedEnd, preStart + Math.max(0, postValue.length - (preValue.length - (preEnd - preStart))));
+                        const before = postValue.substring(0, insertedStart);
+                        const inserted = postValue.substring(insertedStart, insertedEnd);
+                        const after = postValue.substring(insertedEnd);
+                        const decodedInserted = this.safeDecodeIfEncoded(inserted);
+                        if (decodedInserted !== inserted) {
+                            target.value = before + decodedInserted + after;
+                            const caret = before.length + decodedInserted.length;
+                            target.selectionStart = target.selectionEnd = caret;
+                            target.dispatchEvent(new Event('input', { bubbles: true }));
+                        }
+                    } catch (_) {}
+                }, 0);
+            } catch (_) {}
+        });
+
+        // Delegated input handler for decoding when paste events are unavailable
+        document.addEventListener('input', (e) => {
+            const target = e.target;
+            if (!target || target.tagName !== 'TEXTAREA') return;
+            if (!(target.id === 'newNote' || (target.classList && target.classList.contains('edit-note-textarea')))) return;
+            this.maybeAutoDecodeTextareaValue(target);
+        });
+    }
+
+    // Try to detect and decode percent-encoded plain text safely
+    safeDecodeIfEncoded(text) {
+        // Quick reject for typical plain text without percent-encoding
+        if (!/%[0-9A-Fa-f]{2}/.test(text) && text.indexOf('+') === -1) return text;
+        try {
+            // Replace '+' with space for x-www-form-urlencoded style pastes
+            const candidate = text.replace(/\+/g, ' ');
+            const decoded = decodeURIComponent(candidate);
+            // Heuristic: only accept if decoding increases whitespace or removes % sequences
+            const pctCountBefore = (text.match(/%[0-9A-Fa-f]{2}/g) || []).length;
+            const pctCountAfter = (decoded.match(/%[0-9A-Fa-f]{2}/g) || []).length;
+            if (pctCountAfter < pctCountBefore) return decoded;
+            // Also accept if the decoded version contains common separators/spaces that were encoded
+            if (/\s/.test(decoded) && decoded.length <= text.length + 10) return decoded;
+            return text;
+        } catch (_) {
+            return text;
+        }
+    }
+
+    // Decode whole textarea value if it appears to be a URL-encoded blob (e.g., mail subject)
+    maybeAutoDecodeTextareaValue(target) {
+        try {
+            const value = String(target.value || '');
+            if (!/%[0-9A-Fa-f]{2}/.test(value)) return;
+            const pctCount = (value.match(/%[0-9A-Fa-f]{2}/g) || []).length;
+            const looksEncoded = pctCount >= 3 || /%20|%0A|%3A|%2D/.test(value) || /^subject:/i.test(value);
+            if (!looksEncoded) return;
+            const decoded = this.safeDecodeIfEncoded(value);
+            if (decoded !== value) {
+                const caret = target.selectionStart;
+                const offsetFromEnd = value.length - caret;
+                target.value = decoded;
+                // Try to preserve caret relative to end
+                const newCaret = Math.max(0, decoded.length - offsetFromEnd);
+                target.selectionStart = target.selectionEnd = newCaret;
+                target.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+        } catch (_) {}
     }
 
     async editNote(noteId) {
@@ -2324,6 +2585,47 @@ class TodoApp {
                     notification.parentNode.removeChild(notification);
                 }
             }, 300);
+        }, 4000);
+    }
+
+    showUndoToast(message, onUndo) {
+        const toast = document.createElement('div');
+        toast.setAttribute('role', 'status');
+        toast.setAttribute('aria-live', 'polite');
+        toast.style.position = 'fixed';
+        toast.style.bottom = `calc(16px + env(safe-area-inset-bottom))`;
+        toast.style.left = '50%';
+        toast.style.transform = 'translateX(-50%)';
+        toast.style.background = '#111827';
+        toast.style.color = '#fff';
+        toast.style.padding = '12px 16px';
+        toast.style.borderRadius = '9999px';
+        toast.style.boxShadow = '0 8px 20px rgba(0,0,0,0.25)';
+        toast.style.zIndex = '10000';
+        toast.style.display = 'flex';
+        toast.style.alignItems = 'center';
+        toast.style.gap = '12px';
+        const text = document.createElement('span');
+        text.textContent = message;
+        const btn = document.createElement('button');
+        btn.textContent = 'Undo';
+        btn.style.background = '#2563eb';
+        btn.style.color = '#fff';
+        btn.style.border = 'none';
+        btn.style.borderRadius = '9999px';
+        btn.style.padding = '8px 12px';
+        btn.style.fontWeight = '600';
+        btn.style.cursor = 'pointer';
+        btn.addEventListener('click', async () => {
+            try { await onUndo?.(); } catch(_) {}
+            if (toast.parentNode) toast.parentNode.removeChild(toast);
+            this.hapticImpact('medium');
+        });
+        toast.appendChild(text);
+        toast.appendChild(btn);
+        document.body.appendChild(toast);
+        setTimeout(() => {
+            if (toast.parentNode) toast.parentNode.removeChild(toast);
         }, 4000);
     }
 
