@@ -9,6 +9,7 @@ class TodoApp {
         this.currentExcludeTags = [];
         this.currentTaskTags = [];
         this.availableTags = [];
+        this.currentCategoryTag = null;
         this.searchTimeout = null;
         this.editingNoteId = null;
         this.columnStates = this.loadColumnStates();
@@ -88,7 +89,23 @@ class TodoApp {
             }
         } catch (_) {}
 
+        // Restore last selected category if present
+        try {
+            let saved = '';
+            if (window.Capacitor && window.Capacitor.isNativePlatform() && window.Capacitor.Plugins?.Preferences) {
+                const res = await window.Capacitor.Plugins.Preferences.get({ key: 'currentCategoryTag' });
+                saved = (res && res.value) || '';
+            } else {
+                saved = localStorage.getItem('currentCategoryTag') || '';
+            }
+            this.currentCategoryTag = saved || null;
+        } catch (_) {}
+
         await this.loadTags();
+        // If a category is saved, prime includeTags accordingly before first load
+        if (this.currentCategoryTag) {
+            this.currentIncludeTags = [this.currentCategoryTag];
+        }
         await this.loadTasks();
         this.setupEventListeners();
         this.setupDragAndDrop();
@@ -241,6 +258,7 @@ class TodoApp {
             
             this.tasks = await window.dataService.getTasks(filters);
             this.renderTasks();
+            await this.buildCategoryTabs();
         } catch (error) {
             console.error('Error loading tasks:', error);
         }
@@ -250,9 +268,63 @@ class TodoApp {
         try {
             this.availableTags = await window.dataService.getTags();
             this.updateTagFilter();
+            await this.buildCategoryTabs();
         } catch (error) {
             console.error('Error loading tags:', error);
         }
+    }
+
+    async setCategory(tagOrNull) {
+        this.currentCategoryTag = tagOrNull;
+        const include = tagOrNull ? [tagOrNull] : [];
+        await this.loadTasks(null, null, null, include, this.currentExcludeTags);
+        try {
+            if (window.Capacitor && window.Capacitor.isNativePlatform() && window.Capacitor.Plugins?.Preferences) {
+                await window.Capacitor.Plugins.Preferences.set({ key: 'currentCategoryTag', value: this.currentCategoryTag || '' });
+            } else {
+                localStorage.setItem('currentCategoryTag', this.currentCategoryTag || '');
+            }
+        } catch (_) {}
+    }
+
+    async buildCategoryTabs() {
+        const container = document.getElementById('categoryTabs');
+        if (!container) return;
+
+        // Build from ALL known tags and ALL tasks (so counts don't change with filtering)
+        const allTags = await window.dataService.getTags();
+        const allTasks = await window.dataService.getTasks({});
+        const categories = (Array.isArray(allTags) ? allTags : [])
+            .filter(t => typeof t === 'string' && t.startsWith('@'))
+            .sort((a, b) => a.localeCompare(b));
+
+        if (categories.length === 0) {
+            container.innerHTML = '';
+            container.style.display = 'none';
+            return;
+        }
+
+        container.innerHTML = '';
+        container.style.display = 'flex';
+
+        // Always include All with TOTAL count (not filtered)
+        const allBtn = document.createElement('button');
+        allBtn.className = 'category-tab' + (this.currentCategoryTag === null ? ' active' : '');
+        allBtn.textContent = `All (${allTasks.length})`;
+        allBtn.type = 'button';
+        allBtn.onclick = () => this.setCategory(null);
+        container.appendChild(allBtn);
+
+        // Render each category with TOTAL counts
+        categories.forEach(tag => {
+            const btn = document.createElement('button');
+            btn.className = 'category-tab' + ((this.currentCategoryTag === tag) ? ' active' : '');
+            const count = allTasks.reduce((acc, t) => acc + (Array.isArray(t.tags) && t.tags.includes(tag) ? 1 : 0), 0);
+            btn.textContent = `${tag.replace(/^@/, '')} (${count})`;
+            btn.type = 'button';
+            btn.onclick = () => this.setCategory(tag);
+            container.appendChild(btn);
+        });
     }
 
     syncUIState() {
@@ -377,7 +449,11 @@ class TodoApp {
             if (fab) fab.style.display = 'block';
             this.updateMobileSegments();
         } else {
-            if (bottomBar) bottomBar.style.display = 'none';
+            if (bottomBar) {
+                bottomBar.style.display = 'none';
+                // Remove entirely to prevent any unexpected layout leaks
+                if (bottomBar.parentNode) bottomBar.parentNode.removeChild(bottomBar);
+            }
             if (fab) fab.style.display = 'none';
             document.body.removeAttribute('data-mobile-column');
         }
@@ -386,11 +462,16 @@ class TodoApp {
             const mobileNow = window.matchMedia && window.matchMedia('(max-width: 768px)').matches;
             if (mobileNow) {
                 document.body.setAttribute('data-mobile-column', this.mobileColumn);
-                if (bottomBar) bottomBar.style.display = 'flex';
+                const bb = document.getElementById('mobileBottomBar');
+                if (bb) bb.style.display = 'flex';
                 if (fab) fab.style.display = 'block';
                 this.updateMobileSegments();
             } else {
-                if (bottomBar) bottomBar.style.display = 'none';
+                const bb = document.getElementById('mobileBottomBar');
+                if (bb) {
+                    bb.style.display = 'none';
+                    if (bb.parentNode) bb.parentNode.removeChild(bb);
+                }
                 if (fab) fab.style.display = 'none';
                 document.body.removeAttribute('data-mobile-column');
             }
@@ -1330,6 +1411,13 @@ class TodoApp {
             document.getElementById('taskPriority').value = 'medium';
             document.getElementById('taskStatus').value = 'todo';
             this.currentTaskTags = [];
+            // If a @category tab is active, prefill that tag on create
+            if (this.currentCategoryTag && typeof this.currentCategoryTag === 'string' && this.currentCategoryTag.startsWith('@')) {
+                const prefill = this.currentCategoryTag.toLowerCase();
+                if (!this.currentTaskTags.includes(prefill)) {
+                    this.currentTaskTags.push(prefill);
+                }
+            }
             this.togglePendingReason('todo');
         }
         

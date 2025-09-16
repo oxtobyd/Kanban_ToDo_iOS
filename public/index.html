@@ -96,6 +96,7 @@
                 </button>
             </div>
         </header>
+        <div id="categoryTabs" class="category-tabs" aria-label="Task categories"></div>
 
         <main class="kanban-board">
             <div class="column" data-status="todo">
@@ -201,7 +202,7 @@
                         <input type="text" id="taskTags" placeholder="Type and press Enter to add tags...">
                         <div class="tags-display" id="tagsDisplay"></div>
                     </div>
-                    <small class="form-help">Press Enter to add a tag, click tags to remove them</small>
+                    <small class="form-help">Press Enter to add a tag, click tags to remove them. @ prefixes create categories.</small>
                 </div>
                 <div class="form-actions">
                     <button type="button" onclick="closeTaskModal()">Cancel</button>

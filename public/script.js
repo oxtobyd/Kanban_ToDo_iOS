@@ -9,6 +9,7 @@ class TodoApp {
         this.currentExcludeTags = [];
         this.currentTaskTags = [];
         this.availableTags = [];
+        this.currentCategoryTag = null;
         this.searchTimeout = null;
         this.editingNoteId = null;
         this.pendingTaskId = null;
@@ -41,6 +42,12 @@ class TodoApp {
         console.log('Import button found:', !!importBtn);
         
         await this.loadTags();
+        // Restore last selected category from localStorage
+        try {
+            const saved = localStorage.getItem('currentCategoryTag') || '';
+            this.currentCategoryTag = saved || null;
+            if (this.currentCategoryTag) this.currentIncludeTags = [this.currentCategoryTag];
+        } catch (_) {}
         await this.loadTasks();
         this.setupEventListeners();
         this.setupDragAndDrop();
@@ -79,6 +86,7 @@ class TodoApp {
             const response = await fetch(url);
             this.tasks = await response.json();
             this.renderTasks();
+            this.buildCategoryTabs();
         } catch (error) {
             console.error('Error loading tasks:', error);
         }
@@ -89,8 +97,48 @@ class TodoApp {
             const response = await fetch('/api/tags');
             this.availableTags = await response.json();
             this.updateTagFilter();
+            this.buildCategoryTabs();
         } catch (error) {
             console.error('Error loading tags:', error);
+        }
+    }
+
+    async setCategory(tagOrNull) {
+        this.currentCategoryTag = tagOrNull;
+        const include = tagOrNull ? [tagOrNull] : [];
+        await this.loadTasks(null, null, null, include, this.currentExcludeTags);
+        try { localStorage.setItem('currentCategoryTag', this.currentCategoryTag || ''); } catch (_) {}
+    }
+
+    buildCategoryTabs() {
+        const container = document.getElementById('categoryTabs');
+        if (!container) return;
+
+        const tagCounts = new Map();
+        for (const task of this.tasks) {
+            const tags = Array.isArray(task.tags) ? task.tags : [];
+            for (const t of tags) {
+                if (typeof t !== 'string') continue;
+                if (!t.startsWith('@')) continue;
+                tagCounts.set(t, (tagCounts.get(t) || 0) + 1);
+            }
+        }
+
+        const tabs = [{ label: 'All', tag: null, count: this.tasks.length }];
+        const sorted = Array.from(tagCounts.entries())
+            .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+            .map(([tag, count]) => ({ label: tag.replace(/^@/, ''), tag, count }));
+        const MAX_TABS = 8;
+        tabs.push(...sorted.slice(0, MAX_TABS));
+
+        container.innerHTML = '';
+        for (const { label, tag, count } of tabs) {
+            const btn = document.createElement('button');
+            btn.className = 'category-tab' + ((this.currentCategoryTag === tag) ? ' active' : '');
+            btn.textContent = count != null ? `${label} (${count})` : label;
+            btn.type = 'button';
+            btn.onclick = () => this.setCategory(tag);
+            container.appendChild(btn);
         }
     }
 

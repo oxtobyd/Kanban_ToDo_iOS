@@ -301,6 +301,10 @@
     #floatingTagFilterBtn {
         display: flex !important;
     }
+    /* Force-hide mobile-only bottom bar on desktop */
+    .mobile-bottom-bar {
+        display: none !important;
+    }
 }
 
 /* Hide floating filter on mobile */
@@ -324,6 +328,9 @@ body {
     -webkit-overflow-scrolling: touch;
     overflow-x: hidden;
 }
+
+/* Default: never show mobile bottom bar unless explicitly enabled via media query */
+.mobile-bottom-bar { display: none !important; }
 /* Dark mode base (manual toggle via data-theme) */
 body[data-theme="dark"] {
     background: linear-gradient(135deg, #0b1220 0%, #0a0f1c 100%);
@@ -346,6 +353,7 @@ body[data-theme="dark"] .column { box-shadow: 0 12px 36px rgba(0,0,0,0.4); }
 /* Force high-contrast task card surface in dark */
 body[data-theme="dark"] .task-card {
     background: #0f172a !important;
+    color: #e5e7eb;
 }
 body[data-theme="dark"] .search-box,
 body[data-theme="dark"] .filters select,
@@ -367,6 +375,18 @@ body[data-theme="dark"] .task-title { color: #f8fafc; }
 body[data-theme="dark"] .task-description { color: #e2e8f0; }
 body[data-theme="dark"] .task-meta { color: #cbd5e1; }
 body[data-theme="dark"] .task-actions svg { color: #cbd5e1; }
+/* Ensure subtask text is not affected by priority color in dark mode */
+body[data-theme="dark"] .task-card .subtask-item .subtask-text { color: #e5e7eb !important; }
+body[data-theme="dark"] .task-card.priority-urgent .subtask-item .subtask-text,
+body[data-theme="dark"] .task-card.priority-high .subtask-item .subtask-text,
+body[data-theme="dark"] .task-card.priority-medium .subtask-item .subtask-text,
+body[data-theme="dark"] .task-card.priority-low .subtask-item .subtask-text { color: #e5e7eb !important; }
+/* Also target the alternate subtask structure used in enhanced subtasks */
+body[data-theme="dark"] .task-card .subtasks-list .subtask-title { color: #e5e7eb !important; }
+body[data-theme="dark"] .task-card.priority-urgent .subtasks-list .subtask-title,
+body[data-theme="dark"] .task-card.priority-high .subtasks-list .subtask-title,
+body[data-theme="dark"] .task-card.priority-medium .subtasks-list .subtask-title,
+body[data-theme="dark"] .task-card.priority-low .subtasks-list .subtask-title { color: #e5e7eb !important; }
 body[data-theme="dark"] .task-actions .notes-btn { color: #93c5fd; }
 body[data-theme="dark"] .task-actions .edit-btn { color: #34d399; }
 body[data-theme="dark"] .task-actions .delete-btn { color: #f87171; }
@@ -608,6 +628,35 @@ body[data-theme="dark"] .pending-reason { background: #fde68a; border-color: #f5
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
     backdrop-filter: blur(10px);
 }
+
+/* Category Tabs */
+.category-tabs {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding: 8px 4px 0 4px;
+    margin-top: 8px;
+    margin-bottom: 12px;
+}
+.category-tab {
+    padding: 6px 10px;
+    border-radius: 999px;
+    background: #f1f5f9;
+    color: #334155;
+    border: 1px solid #e2e8f0;
+    cursor: pointer;
+    white-space: nowrap;
+    font-size: 0.85rem;
+}
+.category-tab:hover { background: #eaf0f7; }
+.category-tab.active {
+    background: #667eea;
+    color: #ffffff;
+    border-color: #667eea;
+}
+body[data-theme="dark"] .category-tab { background: #0f172a; color: #e5e7eb; border-color: #334155; }
+body[data-theme="dark"] .category-tab:hover { background: #111827; }
+body[data-theme="dark"] .category-tab.active { background: #4f46e5; border-color: #4f46e5; }
 
 .header-controls {
     display: flex;
@@ -1716,6 +1765,7 @@ body[data-theme="dark"] .pending-reason { background: #fde68a; border-color: #f5
 
     /* Bottom segmented control */
     .mobile-bottom-bar {
+        display: flex !important;
         position: fixed;
         bottom: 0;
         left: 0;
@@ -2604,6 +2654,21 @@ nding reason styling */
     box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
 }
 
+/* Dark mode: Task Status select inside modal */
+body[data-theme="dark"] #taskStatus {
+    background: #0f172a;
+    color: #e5e7eb;
+    border-color: #334155;
+}
+body[data-theme="dark"] #taskStatus:focus {
+    border-color: #818cf8;
+    box-shadow: 0 0 0 2px rgba(129, 140, 248, 0.15);
+}
+body[data-theme="dark"] #taskStatus option {
+    background: #0f172a;
+    color: #e5e7eb;
+}
+
 /* Pending task card styling */
 .task-card.status-pending {
     border-left: 4px solid #f39c12;
@@ -2711,6 +2776,13 @@ ing Reason Modal */
     text-decoration: line-through;
     color: #a0aec0;
 }
+
+/* Improve sub-task readability in dark mode */
+body[data-theme="dark"] .subtask-item { font-size: 0.9rem; }
+/* Lock subtask text to readable light color in dark mode, independent of priority */
+body[data-theme="dark"] .subtask-text { color: #e5e7eb !important; }
+body[data-theme="dark"] .subtask-text.completed { color: #94a3b8; }
+body[data-theme="dark"] .subtask-checkbox { border-color: #475569; }
 
 .subtask-actions {
     display: flex;
