@@ -170,13 +170,29 @@ class TodoApp {
         if (overlay) overlay.style.display = visible ? 'none' : 'flex';
         if (!visible) {
             const input = document.getElementById('mobileSearchInput');
-            if (input) setTimeout(() => input.focus(), 50);
+            if (input) {
+                // Clear any existing search
+                input.value = this.currentSearch || '';
+                setTimeout(() => input.focus(), 50);
+            }
+            
+            // Sync tag options with current available tags
+            const mobileTag = document.getElementById('mobileTag');
+            if (mobileTag) {
+                mobileTag.innerHTML = '<option value="">All Tags</option>' + this.availableTags.map(t => `<option value="${t}">${t}</option>`).join('');
+                // Set current tag filter if active
+                if (this.currentIncludeTags.length > 0) {
+                    mobileTag.value = this.currentIncludeTags[0];
+                }
+            }
+            
+            // Sync priority filter
+            const mobilePriority = document.getElementById('mobilePriority');
+            if (mobilePriority) {
+                mobilePriority.value = this.currentPriority || '';
+            }
         }
-        // sync tag options
-        const mobileTag = document.getElementById('mobileTag');
-        if (mobileTag) {
-            mobileTag.innerHTML = '<option value="">All Tags</option>' + this.availableTags.map(t => `<option value="${t}">${t}</option>`).join('');
-        }
+        this.hapticImpact('light');
     }
 
     openMobileActions() {
@@ -452,6 +468,26 @@ class TodoApp {
             document.body.setAttribute('data-mobile-column', this.mobileColumn);
             if (bottomBar) bottomBar.style.display = 'flex';
             if (fab) fab.style.display = 'block';
+            
+            // Add touch feedback to mobile elements
+            setTimeout(() => {
+                const mobileSegments = document.querySelectorAll('.mobile-segment');
+                mobileSegments.forEach(segment => this.addTouchFeedback(segment));
+                
+                const mobileSearchBtn = document.querySelector('.mobile-search-btn');
+                const mobileMenuBtn = document.querySelector('.mobile-menu-btn');
+                const moCloseBtn = document.querySelector('.mo-close');
+                const moClearBtn = document.querySelector('.mo-clear-btn');
+                const logo = document.querySelector('.logo');
+                
+                if (mobileSearchBtn) this.addTouchFeedback(mobileSearchBtn);
+                if (mobileMenuBtn) this.addTouchFeedback(mobileMenuBtn);
+                if (moCloseBtn) this.addTouchFeedback(moCloseBtn);
+                if (moClearBtn) this.addTouchFeedback(moClearBtn);
+                if (logo) this.addTouchFeedback(logo);
+                if (fab) this.addTouchFeedback(fab);
+            }, 100);
+            
             this.updateMobileSegments();
         } else {
             if (bottomBar) {
@@ -1333,12 +1369,72 @@ class TodoApp {
         }
     }
 
+    // Enhanced mobile UI feedback methods
+    showTaskLoading(taskId) {
+        const taskCard = document.querySelector(`[data-task-id="${taskId}"]`);
+        if (taskCard) {
+            taskCard.classList.add('loading');
+        }
+    }
+
+    hideTaskLoading(taskId) {
+        const taskCard = document.querySelector(`[data-task-id="${taskId}"]`);
+        if (taskCard) {
+            taskCard.classList.remove('loading');
+        }
+    }
+
+    showTaskSuccess(taskId) {
+        const taskCard = document.querySelector(`[data-task-id="${taskId}"]`);
+        if (taskCard) {
+            taskCard.classList.add('success');
+            setTimeout(() => {
+                taskCard.classList.remove('success');
+            }, 600);
+        }
+    }
+
+    showTaskError(taskId) {
+        const taskCard = document.querySelector(`[data-task-id="${taskId}"]`);
+        if (taskCard) {
+            taskCard.classList.add('error');
+            setTimeout(() => {
+                taskCard.classList.remove('error');
+            }, 600);
+        }
+    }
+
+    // Enhanced mobile touch feedback
+    addTouchFeedback(element) {
+        if (!element) return;
+        
+        element.addEventListener('touchstart', (e) => {
+            element.style.transform = 'scale(0.98)';
+            element.style.transition = 'transform 0.1s ease';
+        }, { passive: true });
+        
+        element.addEventListener('touchend', (e) => {
+            element.style.transform = '';
+        }, { passive: true });
+        
+        element.addEventListener('touchcancel', (e) => {
+            element.style.transform = '';
+        }, { passive: true });
+    }
+
     async updateTaskStatus(taskId, newStatus, pendingReason = null) {
         try {
+            this.showTaskLoading(taskId);
             await window.dataService.updateTaskStatus(taskId, newStatus, pendingReason);
             await this.loadTasks(null, null, null, null, null, true); // Force refresh after status change
+            this.hideTaskLoading(taskId);
+            this.showTaskSuccess(taskId);
+            this.hapticImpact('light');
         } catch (error) {
             console.error('Error updating task status:', error);
+            this.hideTaskLoading(taskId);
+            this.showTaskError(taskId);
+            this.hapticImpact('heavy');
         }
     }
 
@@ -1515,6 +1611,43 @@ class TodoApp {
         this.currentPriority = priority;
         this.updateFilterButtonIndicator();
         await this.loadTasks();
+    }
+
+    async filterByTag(tag) {
+        if (tag) {
+            this.currentIncludeTags = [tag];
+        } else {
+            this.currentIncludeTags = [];
+        }
+        this.updateFilterButtonIndicator();
+        await this.loadTasks();
+    }
+
+    clearMobileFilters() {
+        // Clear search
+        const mobileSearchInput = document.getElementById('mobileSearchInput');
+        if (mobileSearchInput) {
+            mobileSearchInput.value = '';
+        }
+        this.currentSearch = '';
+        
+        // Clear priority filter
+        const mobilePriority = document.getElementById('mobilePriority');
+        if (mobilePriority) {
+            mobilePriority.value = '';
+        }
+        this.currentPriority = '';
+        
+        // Clear tag filter
+        const mobileTag = document.getElementById('mobileTag');
+        if (mobileTag) {
+            mobileTag.value = '';
+        }
+        this.currentIncludeTags = [];
+        
+        this.updateFilterButtonIndicator();
+        this.loadTasks();
+        this.hapticImpact('light');
     }
 
     async sortTasks(sortBy) {
