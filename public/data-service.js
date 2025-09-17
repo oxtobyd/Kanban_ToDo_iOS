@@ -198,32 +198,37 @@ class DataService {
     }
 
     async saveToStorage() {
-        if (this.isCapacitor) {
-            await this.saveToiCloud();
-            // Also save to proper iCloud for cross-device sync (NSUbiquitousKeyValueStore via proper plugin)
-            if (window.iCloudSyncProper) {
-                console.log('Saving to proper iCloud...');
-                const exportData = await this.exportData();
+        try {
+            if (this.isCapacitor) {
+                await this.saveToiCloud();
+                // Also save to proper iCloud for cross-device sync (NSUbiquitousKeyValueStore via proper plugin)
+                if (window.iCloudSyncProper) {
+                    console.log('Saving to proper iCloud...');
+                    const exportData = await this.exportData();
 
-                // Check iCloud availability first
-                const iCloudStatus = await window.iCloudSyncProper.checkiCloudAvailability();
-                console.log('Proper iCloud availability check:', iCloudStatus);
+                    // Check iCloud availability first
+                    const iCloudStatus = await window.iCloudSyncProper.checkiCloudAvailability();
+                    console.log('Proper iCloud availability check:', iCloudStatus);
 
-                const success = await window.iCloudSyncProper.saveToiCloud(exportData.data);
-                console.log('Proper iCloud save result:', success);
-                // After a successful save, update last sync time for accurate comparisons
-                try {
-                    if (success && exportData && exportData.exported_at) {
-                        this.setLastSyncTime(exportData.exported_at);
-                    } else {
-                        this.setLastSyncTime(new Date().toISOString());
-                    }
-                } catch (_) {}
+                    const success = await window.iCloudSyncProper.saveToiCloud(exportData.data);
+                    console.log('Proper iCloud save result:', success);
+                    // After a successful save, update last sync time for accurate comparisons
+                    try {
+                        if (success && exportData && exportData.exported_at) {
+                            this.setLastSyncTime(exportData.exported_at);
+                        } else {
+                            this.setLastSyncTime(new Date().toISOString());
+                        }
+                    } catch (_) {}
+                } else {
+                    console.log('Proper iCloud sync service not available');
+                }
             } else {
-                console.log('Proper iCloud sync service not available');
+                await this.saveToLocalStorage();
             }
-        } else {
-            await this.saveToLocalStorage();
+        } catch (error) {
+            console.error('Error in saveToStorage:', error);
+            throw error; // Re-throw so calling functions know the save failed
         }
     }
 
@@ -278,6 +283,7 @@ class DataService {
             
         } catch (error) {
             console.error('Error saving to iCloud:', error);
+            throw error; // Re-throw the error so calling functions know it failed
         }
     }
 
@@ -295,6 +301,14 @@ class DataService {
     }
 
     // Task methods
+    async getTask(id) {
+        const task = this.tasks.find(task => task.id === parseInt(id));
+        if (!task) {
+            throw new Error('Task not found');
+        }
+        return task;
+    }
+
     async getTasks(filters = {}) {
         let filteredTasks = [...this.tasks];
         

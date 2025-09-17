@@ -146,10 +146,18 @@ class TodoApp {
 
     updateThemeToggleVisual() {
         const btn = document.getElementById('themeToggleBtn');
-        if (!btn) return;
+        const mobileBtn = document.getElementById('mobileThemeToggleBtn');
         const theme = document.body.getAttribute('data-theme') || 'light';
-        btn.setAttribute('aria-pressed', theme === 'dark' ? 'true' : 'false');
-        btn.title = theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode';
+        
+        if (btn) {
+            btn.setAttribute('aria-pressed', theme === 'dark' ? 'true' : 'false');
+            btn.title = theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode';
+        }
+        
+        if (mobileBtn) {
+            mobileBtn.setAttribute('aria-pressed', theme === 'dark' ? 'true' : 'false');
+            mobileBtn.title = theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode';
+        }
     }
 
     async hapticImpact(style = 'medium') {
@@ -458,6 +466,14 @@ class TodoApp {
             const countElement = document.querySelector(`[data-status="${status}"] .task-count`);
             countElement.textContent = tasks.length;
         }
+        
+        // Add touch feedback to all task action buttons on mobile
+        if (window.matchMedia && window.matchMedia('(max-width: 768px)').matches) {
+            setTimeout(() => {
+                const taskActionButtons = document.querySelectorAll('.task-actions button');
+                taskActionButtons.forEach(button => this.addTouchFeedback(button));
+            }, 100);
+        }
     }
 
     setupMobileUI() {
@@ -475,12 +491,14 @@ class TodoApp {
                 mobileSegments.forEach(segment => this.addTouchFeedback(segment));
                 
                 const mobileSearchBtn = document.querySelector('.mobile-search-btn');
+                const mobileThemeBtn = document.querySelector('.mobile-theme-btn');
                 const mobileMenuBtn = document.querySelector('.mobile-menu-btn');
                 const moCloseBtn = document.querySelector('.mo-close');
                 const moClearBtn = document.querySelector('.mo-clear-btn');
                 const logo = document.querySelector('.logo');
                 
                 if (mobileSearchBtn) this.addTouchFeedback(mobileSearchBtn);
+                if (mobileThemeBtn) this.addTouchFeedback(mobileThemeBtn);
                 if (mobileMenuBtn) this.addTouchFeedback(mobileMenuBtn);
                 if (moCloseBtn) this.addTouchFeedback(moCloseBtn);
                 if (moClearBtn) this.addTouchFeedback(moClearBtn);
@@ -1496,6 +1514,15 @@ class TodoApp {
         const title = document.getElementById('modalTitle');
         const form = document.getElementById('taskForm');
         
+        // Close mobile actions menu if open
+        this.closeMobileActions();
+        
+        // Hide mobile FAB when modal opens
+        const mobileFab = document.getElementById('mobileFab');
+        if (mobileFab) {
+            mobileFab.style.display = 'none';
+        }
+        
         if (taskId) {
             const task = this.tasks.find(t => t.id === taskId);
             title.textContent = 'Edit Task';
@@ -1565,6 +1592,12 @@ class TodoApp {
     closeTaskModal() {
         document.getElementById('taskModal').style.display = 'none';
         this.currentTaskId = null;
+        
+        // Show mobile FAB again when modal closes (only on mobile)
+        const mobileFab = document.getElementById('mobileFab');
+        if (mobileFab && window.matchMedia && window.matchMedia('(max-width: 768px)').matches) {
+            mobileFab.style.display = 'block';
+        }
     }
 
     async saveTask() {
@@ -1660,10 +1693,21 @@ class TodoApp {
     }
 
     async deleteTask(taskId) {
+        console.log('Delete task called for ID:', taskId); // Debug log
+        
+        // Show confirmation dialog
+        const confirmed = await this.showDeleteConfirmation();
+        if (!confirmed) {
+            console.log('Delete cancelled by user');
+            return;
+        }
+        
         // Optimistic delete with undo snackbar
         try {
             const task = await window.dataService.getTask(taskId);
+            console.log('Found task to delete:', task);
             await window.dataService.deleteTask(taskId);
+            console.log('Task deleted successfully, reloading tasks...');
             await this.loadTasks();
             this.hapticImpact('light');
             this.showUndoToast('Task deleted', async () => {
@@ -1674,6 +1718,11 @@ class TodoApp {
             });
         } catch (error) {
             console.error('Error deleting task:', error);
+            console.error('Error details:', {
+                message: error.message,
+                stack: error.stack,
+                name: error.name
+            });
         }
     }
 
@@ -1754,6 +1803,13 @@ class TodoApp {
     async openNotesModal(taskId) {
         this.currentTaskId = taskId;
         const modal = document.getElementById('notesModal');
+        
+        // Hide mobile FAB when modal opens
+        const mobileFab = document.getElementById('mobileFab');
+        if (mobileFab) {
+            mobileFab.style.display = 'none';
+        }
+        
         modal.style.display = 'block';
         await this.loadNotes(taskId);
     }
@@ -1761,6 +1817,12 @@ class TodoApp {
     closeNotesModal() {
         document.getElementById('notesModal').style.display = 'none';
         this.currentTaskId = null;
+        
+        // Show mobile FAB again when modal closes (only on mobile)
+        const mobileFab = document.getElementById('mobileFab');
+        if (mobileFab && window.matchMedia && window.matchMedia('(max-width: 768px)').matches) {
+            mobileFab.style.display = 'block';
+        }
     }
 
     async loadNotes(taskId) {
@@ -2292,6 +2354,13 @@ class TodoApp {
     async openNotesModal(taskId) {
         this.currentTaskId = taskId;
         const modal = document.getElementById('notesModal');
+        
+        // Hide mobile FAB when modal opens
+        const mobileFab = document.getElementById('mobileFab');
+        if (mobileFab) {
+            mobileFab.style.display = 'none';
+        }
+        
         modal.style.display = 'block';
         await this.loadNotes(taskId);
     }
@@ -2299,6 +2368,12 @@ class TodoApp {
     closeNotesModal() {
         document.getElementById('notesModal').style.display = 'none';
         this.currentTaskId = null;
+        
+        // Show mobile FAB again when modal closes (only on mobile)
+        const mobileFab = document.getElementById('mobileFab');
+        if (mobileFab && window.matchMedia && window.matchMedia('(max-width: 768px)').matches) {
+            mobileFab.style.display = 'block';
+        }
     }
 
     async loadNotes(taskId) {
@@ -2815,6 +2890,135 @@ class TodoApp {
         }, 4000);
     }
 
+    showDeleteConfirmation() {
+        return new Promise((resolve) => {
+            // Create modal overlay
+            const overlay = document.createElement('div');
+            overlay.style.position = 'fixed';
+            overlay.style.top = '0';
+            overlay.style.left = '0';
+            overlay.style.right = '0';
+            overlay.style.bottom = '0';
+            overlay.style.background = 'rgba(0, 0, 0, 0.5)';
+            overlay.style.zIndex = '10001';
+            overlay.style.display = 'flex';
+            overlay.style.alignItems = 'center';
+            overlay.style.justifyContent = 'center';
+            overlay.style.padding = '20px';
+            
+            // Create modal content
+            const modal = document.createElement('div');
+            modal.style.background = '#fff';
+            modal.style.borderRadius = '12px';
+            modal.style.padding = '24px';
+            modal.style.maxWidth = '400px';
+            modal.style.width = '100%';
+            modal.style.boxShadow = '0 20px 40px rgba(0, 0, 0, 0.3)';
+            
+            // Dark mode support
+            if (document.body.getAttribute('data-theme') === 'dark') {
+                modal.style.background = '#1f2937';
+                modal.style.color = '#f9fafb';
+            }
+            
+            // Create content
+            modal.innerHTML = `
+                <div style="text-align: center; margin-bottom: 24px;">
+                    <div style="font-size: 48px; margin-bottom: 16px;">🗑️</div>
+                    <h3 style="margin: 0 0 8px 0; font-size: 18px; font-weight: 600;">Delete Task?</h3>
+                    <p style="margin: 0; color: #6b7280; font-size: 14px;">This action cannot be undone. You can use the undo option if you change your mind.</p>
+                </div>
+                <div style="display: flex; gap: 12px; justify-content: center;">
+                    <button id="cancelDelete" style="
+                        background: #f3f4f6; 
+                        color: #374151; 
+                        border: none; 
+                        border-radius: 8px; 
+                        padding: 12px 24px; 
+                        font-weight: 600; 
+                        cursor: pointer;
+                        transition: all 0.2s ease;
+                    ">Cancel</button>
+                    <button id="confirmDelete" style="
+                        background: #dc2626; 
+                        color: #fff; 
+                        border: none; 
+                        border-radius: 8px; 
+                        padding: 12px 24px; 
+                        font-weight: 600; 
+                        cursor: pointer;
+                        transition: all 0.2s ease;
+                    ">Delete</button>
+                </div>
+            `;
+            
+            // Dark mode button styles
+            if (document.body.getAttribute('data-theme') === 'dark') {
+                const cancelBtn = modal.querySelector('#cancelDelete');
+                const confirmBtn = modal.querySelector('#confirmDelete');
+                cancelBtn.style.background = '#374151';
+                cancelBtn.style.color = '#f9fafb';
+                confirmBtn.style.background = '#dc2626';
+            }
+            
+            overlay.appendChild(modal);
+            document.body.appendChild(overlay);
+            
+            // Add event listeners
+            const cancelBtn = modal.querySelector('#cancelDelete');
+            const confirmBtn = modal.querySelector('#confirmDelete');
+            
+            const cleanup = () => {
+                if (overlay.parentNode) {
+                    overlay.parentNode.removeChild(overlay);
+                }
+            };
+            
+            cancelBtn.addEventListener('click', () => {
+                cleanup();
+                resolve(false);
+            });
+            
+            confirmBtn.addEventListener('click', () => {
+                cleanup();
+                resolve(true);
+            });
+            
+            // Close on overlay click
+            overlay.addEventListener('click', (e) => {
+                if (e.target === overlay) {
+                    cleanup();
+                    resolve(false);
+                }
+            });
+            
+            // Close on Escape key
+            const handleEscape = (e) => {
+                if (e.key === 'Escape') {
+                    cleanup();
+                    resolve(false);
+                    document.removeEventListener('keydown', handleEscape);
+                }
+            };
+            document.addEventListener('keydown', handleEscape);
+            
+            // Add hover effects
+            cancelBtn.addEventListener('mouseenter', () => {
+                cancelBtn.style.background = document.body.getAttribute('data-theme') === 'dark' ? '#4b5563' : '#e5e7eb';
+            });
+            cancelBtn.addEventListener('mouseleave', () => {
+                cancelBtn.style.background = document.body.getAttribute('data-theme') === 'dark' ? '#374151' : '#f3f4f6';
+            });
+            
+            confirmBtn.addEventListener('mouseenter', () => {
+                confirmBtn.style.background = '#b91c1c';
+            });
+            confirmBtn.addEventListener('mouseleave', () => {
+                confirmBtn.style.background = '#dc2626';
+            });
+        });
+    }
+
     showUndoToast(message, onUndo) {
         const toast = document.createElement('div');
         toast.setAttribute('role', 'status');
@@ -2853,7 +3057,7 @@ class TodoApp {
         document.body.appendChild(toast);
         setTimeout(() => {
             if (toast.parentNode) toast.parentNode.removeChild(toast);
-        }, 4000);
+        }, 6000);
     }
 
     // Manual sync method
