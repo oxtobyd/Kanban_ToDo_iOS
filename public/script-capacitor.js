@@ -1,3 +1,4 @@
+
 class TodoApp {
     constructor() {
         this.tasks = [];
@@ -117,6 +118,7 @@ class TodoApp {
         this.syncUIState();
         this.setupMobileUI();
         this.updateThemeToggleVisual();
+        this.updateFilterButtonIndicator();
         // Inject a style to disable text selection while dragging
         if (!document.getElementById('no-text-select-style')) {
             const style = document.createElement('style');
@@ -259,6 +261,7 @@ class TodoApp {
             this.tasks = await window.dataService.getTasks(filters);
             this.renderTasks();
             await this.buildCategoryTabs();
+            this.updateFilterButtonIndicator();
         } catch (error) {
             console.error('Error loading tasks:', error);
         }
@@ -414,11 +417,13 @@ class TodoApp {
 
     async filterByIncludeTags(tags) {
         this.currentIncludeTags = (Array.isArray(tags) ? tags : []).filter(Boolean);
+        this.updateFilterButtonIndicator();
         await this.loadTasks();
     }
 
     async filterByExcludeTags(tags) {
         this.currentExcludeTags = (Array.isArray(tags) ? tags : []).filter(Boolean);
+        this.updateFilterButtonIndicator();
         await this.loadTasks();
     }
 
@@ -1508,6 +1513,7 @@ class TodoApp {
 
     async filterByPriority(priority) {
         this.currentPriority = priority;
+        this.updateFilterButtonIndicator();
         await this.loadTasks();
     }
 
@@ -3193,6 +3199,18 @@ class TodoApp {
         
         const floatingFilter = document.getElementById('floatingTagFilter');
         floatingFilter.style.display = 'block';
+        // Ensure the close button works reliably on touch devices (iPad)
+        const closeBtn = floatingFilter.querySelector('.floating-tag-filter-close');
+        if (closeBtn && !closeBtn.dataset.boundClose) {
+            const handler = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                this.closeFloatingTagFilter();
+            };
+            closeBtn.addEventListener('click', handler, { passive: false });
+            closeBtn.addEventListener('touchend', handler, { passive: false });
+            closeBtn.dataset.boundClose = '1';
+        }
         
         // Restore saved position
         this.restoreFloatingFilterPosition();
@@ -3346,7 +3364,24 @@ class TodoApp {
         this.currentPriority = '';
         this.updateFloatingTagFilter();
         this.syncUIState();
+        this.updateFilterButtonIndicator();
         this.loadTasks();
+    }
+
+    updateFilterButtonIndicator() {
+        const filterBtn = document.getElementById('floatingTagFilterBtn');
+        if (!filterBtn) return;
+
+        const hasActiveFilters = 
+            (this.currentIncludeTags && this.currentIncludeTags.length > 0) ||
+            (this.currentExcludeTags && this.currentExcludeTags.length > 0) ||
+            (this.currentPriority && this.currentPriority !== '');
+
+        if (hasActiveFilters) {
+            filterBtn.classList.add('active');
+        } else {
+            filterBtn.classList.remove('active');
+        }
     }
 
     saveFloatingFilterPosition() {
@@ -3422,26 +3457,29 @@ class TodoApp {
         document.addEventListener('touchend', dragEnd);
         
         function dragStart(e) {
-            // Prevent text selection
+            // Only start dragging if clicking/touching on the header (not buttons)
+            const isHeaderDrag = (e.target === header) || (header.contains(e.target) && !e.target.closest('button'));
+            if (!isHeaderDrag) {
+                return; // Allow normal clicks/taps (e.g., the close button) to work
+            }
+
+            // Prevent text selection and let drag take over
             e.preventDefault();
             e.stopPropagation();
-            
+
             // Get coordinates from mouse or touch
             const clientX = e.clientX || (e.touches && e.touches[0].clientX);
             const clientY = e.clientY || (e.touches && e.touches[0].clientY);
-            
-            // Only start dragging if clicking/touching on the header (not buttons)
-            if (e.target === header || (header.contains(e.target) && !e.target.closest('button'))) {
-                isDragging = true;
-                floatingFilter.classList.add('dragging');
-                
-                // Prevent text selection globally during drag
-                document.body.style.userSelect = 'none';
-                document.body.style.webkitUserSelect = 'none';
-                
-                initialX = clientX - xOffset;
-                initialY = clientY - yOffset;
-            }
+
+            isDragging = true;
+            floatingFilter.classList.add('dragging');
+
+            // Prevent text selection globally during drag
+            document.body.style.userSelect = 'none';
+            document.body.style.webkitUserSelect = 'none';
+
+            initialX = clientX - xOffset;
+            initialY = clientY - yOffset;
         }
         
         function drag(e) {

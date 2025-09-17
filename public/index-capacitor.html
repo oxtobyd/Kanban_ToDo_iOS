@@ -43,19 +43,6 @@
                     </div>
                 </div>
                 <div class="filters">
-                    <select id="priorityFilter" onchange="app.filterByPriority(this.value)">
-                        <option value="">All Priorities</option>
-                        <option value="urgent">Urgent</option>
-                        <option value="high">High</option>
-                        <option value="medium">Medium</option>
-                        <option value="low">Low</option>
-                    </select>
-                    <select id="includeTagsFilter" multiple size="1" onchange="app.filterByIncludeTags(Array.from(this.selectedOptions).map(o=>o.value))" title="Include tags">
-                        <option value="">Include tags…</option>
-                    </select>
-                    <select id="excludeTagsFilter" multiple size="1" onchange="app.filterByExcludeTags(Array.from(this.selectedOptions).map(o=>o.value))" title="Exclude tags">
-                        <option value="">Exclude tags…</option>
-                    </select>
                     <select id="sortBy" onchange="app.sortTasks(this.value)">
                         <option value="created_at">Sort by Date</option>
                         <option value="priority" selected>Sort by Priority</option>

@@ -54,6 +54,7 @@ class TodoApp {
         this.setupTouchGestures();
         this.setupTagsInput();
         this.syncUIState();
+        this.updateFilterButtonIndicator();
         
         console.log('TodoApp initialized successfully');
     }
@@ -87,6 +88,7 @@ class TodoApp {
             this.tasks = await response.json();
             this.renderTasks();
             this.buildCategoryTabs();
+            this.updateFilterButtonIndicator();
         } catch (error) {
             console.error('Error loading tasks:', error);
         }
@@ -254,11 +256,13 @@ class TodoApp {
 
     async filterByIncludeTags(tags) {
         this.currentIncludeTags = (Array.isArray(tags) ? tags : []).filter(Boolean);
+        this.updateFilterButtonIndicator();
         await this.loadTasks();
     }
 
     async filterByExcludeTags(tags) {
         this.currentExcludeTags = (Array.isArray(tags) ? tags : []).filter(Boolean);
+        this.updateFilterButtonIndicator();
         await this.loadTasks();
     }
 
@@ -968,6 +972,7 @@ class TodoApp {
 
     async filterByPriority(priority) {
         this.currentPriority = priority;
+        this.updateFilterButtonIndicator();
         await this.loadTasks();
     }
 
@@ -1994,7 +1999,25 @@ class TodoApp {
     clearAllTagFilters() {
         this.currentIncludeTags = [];
         this.currentExcludeTags = [];
+        this.currentPriority = '';
+        this.updateFilterButtonIndicator();
         this.loadTasks();
+    }
+
+    updateFilterButtonIndicator() {
+        const filterBtn = document.getElementById('floatingTagFilterBtn');
+        if (!filterBtn) return;
+
+        const hasActiveFilters = 
+            (this.currentIncludeTags && this.currentIncludeTags.length > 0) ||
+            (this.currentExcludeTags && this.currentExcludeTags.length > 0) ||
+            (this.currentPriority && this.currentPriority !== '');
+
+        if (hasActiveFilters) {
+            filterBtn.classList.add('active');
+        } else {
+            filterBtn.classList.remove('active');
+        }
     }
 
     makeFloatingFilterDraggable() {

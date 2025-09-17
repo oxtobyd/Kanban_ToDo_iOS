@@ -20,7 +20,7 @@ def capacitor_pods
   pod 'SerebanoCapacitorIcloudPreferences', :path => '../../node_modules/@serebano/capacitor-icloud-preferences'
 end
 
-target 'App' do
+target 'ToDo Kanban' do
   capacitor_pods
   # Add your Pods here
 end
