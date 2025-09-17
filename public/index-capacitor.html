@@ -437,6 +437,89 @@
     <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
     
+    <script>
+    (function() {
+        function isMobile() {
+            return window.matchMedia('(max-width: 768px)').matches;
+        }
+
+        function setColumnTasklistMaxHeight() {
+            try {
+                // On mobile, we intentionally let the page scroll and avoid inner scrolls
+                if (isMobile()) {
+                    document.documentElement.style.setProperty('--column-tasklist-max', 'none');
+                    return;
+                }
+
+                var appEl = document.querySelector('.app');
+                var headerEl = document.querySelector('.header');
+                // Fallbacks if not found
+                var appPaddingTop = 20, appPaddingBottom = 20;
+                if (appEl) {
+                    var appStyles = window.getComputedStyle(appEl);
+                    appPaddingTop = parseFloat(appStyles.paddingTop) || 0;
+                    appPaddingBottom = parseFloat(appStyles.paddingBottom) || 0;
+                }
+                var headerHeight = headerEl ? headerEl.getBoundingClientRect().height : 0;
+                // Category tabs below header
+                var tabsEl = document.getElementById('categoryTabs');
+                var tabsHeight = tabsEl ? tabsEl.getBoundingClientRect().height : 0;
+
+                // Vertical gaps between rows in the grid
+                var boardEl = document.querySelector('.kanban-board');
+                var boardGap = 20; // default gap from CSS
+                if (boardEl) {
+                    var gridStyles = window.getComputedStyle(boardEl);
+                    var rowGap = parseFloat(gridStyles.rowGap) || parseFloat(gridStyles.gap) || 20;
+                    boardGap = rowGap;
+                }
+
+                // Column internal spacing: padding + header section + header bottom margin
+                var columnPaddingTop = 20, columnPaddingBottom = 20, columnHeaderBottom = 20, columnHeaderPadBottom = 15;
+                var sampleColumn = document.querySelector('.column');
+                if (sampleColumn) {
+                    var colStyles = window.getComputedStyle(sampleColumn);
+                    columnPaddingTop = parseFloat(colStyles.paddingTop) || 0;
+                    columnPaddingBottom = parseFloat(colStyles.paddingBottom) || 0;
+                }
+                var sampleColHeader = document.querySelector('.column-header');
+                var colHeaderHeight = 0;
+                if (sampleColHeader) {
+                    var chRect = sampleColHeader.getBoundingClientRect();
+                    colHeaderHeight = chRect.height;
+                    var chStyles = window.getComputedStyle(sampleColHeader);
+                    columnHeaderBottom = parseFloat(chStyles.marginBottom) || 0;
+                    columnHeaderPadBottom = parseFloat(chStyles.paddingBottom) || 0;
+                }
+
+                var viewportH = window.innerHeight;
+                // Compute available height inside each column for the task list
+                var available = viewportH 
+                    - appPaddingTop - appPaddingBottom 
+                    - headerHeight 
+                    - tabsHeight 
+                    - boardGap 
+                    - columnPaddingTop - columnPaddingBottom 
+                    - colHeaderHeight;
+
+                // Ensure a sensible minimum
+                if (!isFinite(available) || available < 200) available = 200;
+
+                document.documentElement.style.setProperty('--column-tasklist-max', available + 'px');
+            } catch (e) {
+                // In case of any unexpected error, do not block app
+                document.documentElement.style.setProperty('--column-tasklist-max', 'auto');
+            }
+        }
+
+        window.addEventListener('resize', setColumnTasklistMaxHeight);
+        window.addEventListener('orientationchange', setColumnTasklistMaxHeight);
+        document.addEventListener('DOMContentLoaded', setColumnTasklistMaxHeight);
+        // Also run shortly after load to catch fonts/layout settling
+        window.addEventListener('load', function(){ setTimeout(setColumnTasklistMaxHeight, 0); setTimeout(setColumnTasklistMaxHeight, 250); });
+    })();
+    </script>
+    
     <!-- Print Modal -->
     <div class="modal" id="printModal" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="printModalTitle">
         <div class="modal-content">

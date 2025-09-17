@@ -331,6 +331,11 @@
     box-sizing: border-box;
 }
 
+:root {
+    /* Will be set dynamically based on device viewport */
+    --column-tasklist-max: auto;
+}
+
 body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -1069,6 +1074,8 @@ body[data-theme="dark"] .category-tab.active { background: #4f46e5; border-color
     width: 100%;
     max-width: 100%;
     overflow: hidden;
+    display: flex;
+    flex-direction: column;
 }
 
 .column-header {
@@ -1268,6 +1275,10 @@ body[data-theme="dark"] .category-tab.active { background: #4f46e5; border-color
 
 .task-list {
     min-height: 400px;
+    /* Enable per-column scrolling on larger screens */
+    overflow-y: auto;
+    max-height: var(--column-tasklist-max);
+    -webkit-overflow-scrolling: touch;
 }
 
 .task-card {
