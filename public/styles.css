@@ -850,6 +850,22 @@ body[data-theme="dark"] .category-tab.active { background: #4f46e5; border-color
     align-items: center;
 }
 
+/* Mobile app title next to logo */
+.mobile-app-title {
+    display: none;
+    line-height: 1.05;
+}
+.mobile-app-title .line-1 {
+    display: block;
+    font-weight: 800;
+    letter-spacing: 0.2px;
+}
+.mobile-app-title .line-2 {
+    display: block;
+    font-weight: 700;
+    opacity: 0.9;
+}
+
 /* Hide mobile header controls on desktop */
 .mobile-header-controls {
     display: none;
@@ -1989,6 +2005,16 @@ body[data-theme="dark"] .edit-note-textarea:focus {
         flex-shrink: 0;
         min-width: 40px;
         min-height: 40px;
+    }
+
+    .mobile-app-title {
+        display: block;
+        font-size: 12px;
+        color: #1f2937;
+        margin-left: 4px;
+    }
+    body[data-theme="dark"] .mobile-app-title {
+        color: #e5e7eb;
     }
     
     .header .logo {
