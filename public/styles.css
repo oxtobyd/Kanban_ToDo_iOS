@@ -714,6 +714,7 @@ body[data-theme="dark"] .task-card.priority-low { border-left-color: #22c55e; }
 
 /* Pending reason chip on dark */
 body[data-theme="dark"] .pending-reason { background: #fde68a; border-color: #f59e0b; color: #111827; }
+body[data-theme="dark"] .pending-reason em { color: #6b7280; }
 
 .app {
     max-width: 1400px;
@@ -1598,6 +1599,26 @@ body[data-theme="dark"] .category-tab.active { background: #4f46e5; border-color
     border-radius: 8px;
     margin-bottom: 10px;
     resize: vertical;
+}
+
+/* Dark mode for notes textarea (Add Note modal and edit fields) */
+body[data-theme="dark"] .add-note textarea,
+body[data-theme="dark"] .edit-note-textarea {
+    background: #1f2937;
+    border-color: #334155;
+    color: #e5e7eb;
+}
+
+body[data-theme="dark"] .add-note textarea::placeholder,
+body[data-theme="dark"] .edit-note-textarea::placeholder {
+    color: #94a3b8;
+}
+
+body[data-theme="dark"] .add-note textarea:focus,
+body[data-theme="dark"] .edit-note-textarea:focus {
+    outline: none;
+    border-color: #818cf8;
+    box-shadow: 0 0 0 3px rgba(129, 140, 248, 0.15);
 }
 
 .add-note button {
@@ -2743,6 +2764,26 @@ body[data-theme="dark"] .category-tab.active { background: #4f46e5; border-color
     flex-shrink: 0;
 }
 
+/* Dark mode for priority dropdown */
+body[data-theme="dark"] .priority-dropdown {
+    background: #1f2937;
+    border-color: #374151;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+body[data-theme="dark"] .priority-option {
+    color: #f9fafb;
+}
+
+body[data-theme="dark"] .priority-option:hover {
+    background-color: #374151;
+}
+
+body[data-theme="dark"] .priority-option.selected {
+    background-color: #4b5563;
+    color: #ffffff;
+}
+
 /* Responsive adjustments */
 @media (max-width: 768px) {
     .header-controls {
@@ -3102,7 +3143,7 @@ esture Styles */
     
 }
 
-/* Drag handle styles - hidden by default, shown only on mobile */
+/* Drag handle styles - hidden by default, shown only on larger screens where drag is enabled */
 .task-card .drag-handle {
     color: #cbd5e0;
     font-size: 12px;
@@ -3114,8 +3155,8 @@ esture Styles */
     align-items: center;
 }
 
-/* Show drag handle only on mobile/touch devices */
-@media (hover: none) and (pointer: coarse) {
+/* Show drag handle only on larger screens where drag and drop is enabled */
+@media (min-width: 768px) {
     .task-card .drag-handle {
         display: flex;
     }
@@ -3123,6 +3164,13 @@ esture Styles */
     .task-card:hover .drag-handle {
         opacity: 1;
         color: #667eea;
+    }
+}
+
+/* Hide drag handle on mobile/touch devices since drag is disabled */
+@media (hover: none) and (pointer: coarse) {
+    .task-card .drag-handle {
+        display: none !important;
     }
 }
 
@@ -3185,7 +3233,7 @@ esture Styles */
     }
     
     .column-header::after {
-        content: 'Swipe ← → or hold + move to drag';
+        content: 'Swipe ← → to move between columns';
         position: absolute;
         bottom: -25px;
         left: 0;
@@ -3212,6 +3260,11 @@ nding reason styling */
 
 .pending-reason strong {
     color: #6c5700;
+}
+
+.pending-reason em {
+    color: #9ca3af;
+    font-style: italic;
 }
 
 /* Pending column styling - matches other columns */

@@ -113,6 +113,11 @@ class TodoApp {
         this.setupTouchGestures();
         this.setupTagsInput();
         this.setupFileDragAndDrop();
+        
+        // Handle screen size changes (e.g., device rotation)
+        window.addEventListener('resize', () => {
+            this.updateDragAndDropForScreenSize();
+        });
         this.setupNotesInteractions();
         this.applyColumnStates();
         this.syncUIState();
@@ -474,6 +479,9 @@ class TodoApp {
                 taskActionButtons.forEach(button => this.addTouchFeedback(button));
             }, 100);
         }
+        
+        // Update drag and drop based on current screen size
+        this.updateDragAndDropForScreenSize();
     }
 
     setupMobileUI() {
@@ -578,16 +586,16 @@ class TodoApp {
             </div>` : '';
         
         // Render pending reason if task is pending
-        const pendingReasonHTML = (task.status === 'pending' && task.pending_on) ?
+        const pendingReasonHTML = (task.status === 'pending') ?
             `<div class="pending-reason">
-                <strong>Pending on:</strong> ${this.escapeHtml(task.pending_on)}
+                <strong>Pending on:</strong> ${task.pending_on ? this.escapeHtml(task.pending_on) : '<em>No reason specified</em>'}
             </div>` : '';
         
         // Get sub-tasks for this task
         const subtasksHTML = await this.renderSubtasks(task.id);
         
         return `
-            <div class="task-card ${priorityClass} ${isExpanded ? 'expanded' : ''}" draggable="true" data-task-id="${task.id}">
+            <div class="task-card ${priorityClass} ${isExpanded ? 'expanded' : ''}" draggable="${this.isDragAndDropEnabled() ? 'true' : 'false'}" data-task-id="${task.id}">
                 <div class="task-header">
                     <div class="task-title" onclick="app.toggleTaskExpansion(${task.id})" title="Click to expand/collapse task details">${title}</div>
                     <div class="task-header-actions">
@@ -928,6 +936,41 @@ class TodoApp {
 
         // Initialize ARIA selected states
         this.updateAriaForTabs();
+
+        // Expand/collapse task card on single click anywhere in the card
+        // while preserving interactions on interactive elements
+        document.addEventListener('click', (e) => {
+            const taskCard = e.target.closest('.task-card');
+            if (!taskCard) return;
+
+            // Ignore if click originated on interactive controls or within them
+            const interactiveSelectors = [
+                '.task-actions',
+                '.task-actions button',
+                '.notes-btn',
+                '.edit-btn',
+                '.delete-btn',
+                '.task-title',
+                '.priority-badge',
+                '.priority-dropdown',
+                '.priority-option',
+                'a',
+                'input',
+                'textarea',
+                'select',
+                'button',
+            ];
+            if (interactiveSelectors.some(sel => e.target.closest(sel))) return;
+
+            // Do not toggle while dragging or in swipe gesture
+            if (this.isDragging || this.isSwiping) return;
+
+            const taskId = parseInt(taskCard.getAttribute('data-task-id'));
+            if (!Number.isFinite(taskId)) return;
+
+            // Toggle expansion
+            this.toggleTaskExpansion(taskId);
+        });
     }
 
     updateAriaForTabs() {
@@ -1003,7 +1046,19 @@ class TodoApp {
         });
     }
 
+    isDragAndDropEnabled() {
+        // Enable drag and drop for larger screens (tablets and desktop)
+        // Disable for small mobile screens where swipe gestures are used
+        return window.matchMedia && window.matchMedia('(min-width: 768px)').matches;
+    }
+
     setupDragAndDrop() {
+        // Only set up drag and drop for larger screens
+        if (!this.isDragAndDropEnabled()) {
+            console.log('Drag and drop disabled for small mobile screens');
+            return;
+        }
+
         document.addEventListener('dragstart', (e) => {
             const card = e.target.closest('.task-card');
             if (card) {
@@ -1073,6 +1128,18 @@ class TodoApp {
         });
     }
 
+    updateDragAndDropForScreenSize() {
+        // Update draggable attributes based on current screen size
+        const taskCards = document.querySelectorAll('.task-card');
+        const isEnabled = this.isDragAndDropEnabled();
+        
+        taskCards.forEach(card => {
+            card.draggable = isEnabled;
+        });
+        
+        console.log(`Drag and drop ${isEnabled ? 'enabled' : 'disabled'} for current screen size`);
+    }
+
     setupTouchGestures() {
         document.addEventListener('touchstart', (e) => {
             const taskCard = e.target.closest('.task-card');
@@ -1126,8 +1193,8 @@ class TodoApp {
                     Math.pow(e.touches[0].clientY - this.initialTouch.y, 2)
                 );
                 
-                // If held for 300ms and moved more than 10px, enter drag mode
-                if (timeHeld > 300 && distanceMoved > 10) {
+                // If held and moved, enter drag mode (only when drag-and-drop is enabled for screen size)
+                if (this.isDragAndDropEnabled() && timeHeld > 300 && distanceMoved > 10) {
                     e.preventDefault();
                     this.enterDragMode(taskCard, e.touches[0]);
                     return;
@@ -1161,7 +1228,7 @@ class TodoApp {
             }
 
             // Check for tap-and-hold without movement (alternative drag activation)
-            if (this.initialTouch && !this.hasMoved && !this.isSwiping) {
+            if (this.isDragAndDropEnabled() && this.initialTouch && !this.hasMoved && !this.isSwiping) {
                 const timeHeld = Date.now() - this.initialTouch.time;
                 if (timeHeld > 800) { // 800ms hold without movement
                     this.enterDragMode(taskCard, e.changedTouches[0]);
@@ -1463,6 +1530,13 @@ class TodoApp {
         
         input.value = '';
         modal.style.display = 'block';
+        
+        // Hide mobile FAB when pending reason modal is open
+        const mobileFab = document.getElementById('mobileFab');
+        if (mobileFab) {
+            mobileFab.style.display = 'none';
+        }
+        
         setTimeout(() => input.focus(), 100);
         
         const handleEnter = (e) => {
@@ -1490,20 +1564,21 @@ class TodoApp {
         
         modal.style.display = 'none';
         this.pendingTaskId = null;
+        
+        // Show mobile FAB again when pending reason modal is closed
+        const mobileFab = document.getElementById('mobileFab');
+        if (mobileFab && window.matchMedia && window.matchMedia('(max-width: 768px)').matches) {
+            mobileFab.style.display = 'block';
+        }
     }
 
     savePendingReason() {
         const input = document.getElementById('pendingReasonInput');
         const reason = input.value.trim();
         
-        if (!reason) {
-            alert('Please provide a reason why this task is pending.');
-            input.focus();
-            return;
-        }
-        
+        // Allow blank reasons - no validation needed
         if (this.pendingTaskId) {
-            this.updateTaskStatus(this.pendingTaskId, 'pending', reason);
+            this.updateTaskStatus(this.pendingTaskId, 'pending', reason || null);
             this.closePendingReasonModal();
         }
     }
@@ -1610,11 +1685,7 @@ class TodoApp {
 
         if (!title) return;
 
-        if (status === 'pending' && !pendingReason) {
-            alert('Please provide a reason why this task is pending.');
-            document.getElementById('pendingReason').focus();
-            return;
-        }
+        // Allow blank pending reasons - no validation needed
 
         const taskData = {
             title,
