@@ -1,0 +1,146 @@
+{
+  "exportDate": "2025-09-18T10:00:00.000Z",
+  "version": "1.0",
+  "database": {
+    "tasks": [
+      {
+        "id": 1,
+        "title": "Plan Q4 roadmap",
+        "description": "Draft goals, align milestones, prepare deck.",
+        "priority": "urgent",
+        "status": "in_progress",
+        "tags": ["@work", "planning", "q4"],
+        "pending_on": null,
+        "created_at": "2025-09-10T09:00:00.000Z",
+        "updated_at": "2025-09-18T08:30:00.000Z"
+      },
+      {
+        "id": 2,
+        "title": "Fix onboarding flow",
+        "description": "Address edge cases and polish animations.",
+        "priority": "high",
+        "status": "todo",
+        "tags": ["@work", "ui", "bugs"],
+        "pending_on": null,
+        "created_at": "2025-09-12T10:15:00.000Z",
+        "updated_at": "2025-09-12T10:15:00.000Z"
+      },
+      {
+        "id": 3,
+        "title": "Write release notes",
+        "description": "Summarize changes and highlight iCloud sync.",
+        "priority": "medium",
+        "status": "done",
+        "tags": ["@work", "release"],
+        "pending_on": null,
+        "created_at": "2025-09-11T14:00:00.000Z",
+        "updated_at": "2025-09-16T17:45:00.000Z"
+      },
+      {
+        "id": 4,
+        "title": "Prepare App Store screenshots",
+        "description": "Capture iPhone & iPad shots with sample data.",
+        "priority": "medium",
+        "status": "in_progress",
+        "tags": ["@work", "store", "design"],
+        "pending_on": null,
+        "created_at": "2025-09-15T09:30:00.000Z",
+        "updated_at": "2025-09-18T08:00:00.000Z"
+      },
+      {
+        "id": 5,
+        "title": "Book dentist appointment",
+        "description": "Routine check-up. Prefer morning slot.",
+        "priority": "low",
+        "status": "todo",
+        "tags": ["@home", "health"],
+        "pending_on": null,
+        "created_at": "2025-09-09T12:00:00.000Z",
+        "updated_at": "2025-09-09T12:00:00.000Z"
+      },
+      {
+        "id": 6,
+        "title": "Order groceries",
+        "description": "Veggies, fruit, milk, coffee beans.",
+        "priority": "medium",
+        "status": "done",
+        "tags": ["@home", "errands"],
+        "pending_on": null,
+        "created_at": "2025-09-08T18:00:00.000Z",
+        "updated_at": "2025-09-13T10:20:00.000Z"
+      },
+      {
+        "id": 7,
+        "title": "Follow up with design team",
+        "description": "Waiting on final icon set delivery.",
+        "priority": "high",
+        "status": "pending",
+        "tags": ["@work", "design"],
+        "pending_on": "Awaiting assets from Design (due Fri)",
+        "created_at": "2025-09-14T11:00:00.000Z",
+        "updated_at": "2025-09-17T16:05:00.000Z"
+      },
+      {
+        "id": 8,
+        "title": "Weekend hike planning",
+        "description": "Pick trail, check weather, pack list.",
+        "priority": "low",
+        "status": "todo",
+        "tags": ["@personal", "outdoors"],
+        "pending_on": null,
+        "created_at": "2025-09-13T09:10:00.000Z",
+        "updated_at": "2025-09-13T09:10:00.000Z"
+      }
+    ],
+    "notes": [
+      { "id": 1, "task_id": 1, "content": "Outline deck sections: Goals, Timeline, Metrics.", "created_at": "2025-09-16T08:00:00.000Z" },
+      { "id": 2, "task_id": 4, "content": "Use dark mode and light mode examples.", "created_at": "2025-09-17T13:20:00.000Z" },
+      { "id": 3, "task_id": 7, "content": "Pinged design on Slack. ETA Friday.", "created_at": "2025-09-17T16:00:00.000Z" },
+      { "id": 4, "task_id": 5, "content": "Check insurance coverage for cleaning.", "created_at": "2025-09-12T09:30:00.000Z" }
+    ],
+    "subTasks": [
+      { "id": 1, "task_id": 1, "title": "Draft goals", "completed": true, "created_at": "2025-09-10T09:30:00.000Z", "updated_at": "2025-09-10T09:45:00.000Z" },
+      { "id": 2, "task_id": 1, "title": "Define milestones", "completed": false, "created_at": "2025-09-10T10:00:00.000Z", "updated_at": "2025-09-17T08:45:00.000Z" },
+      { "id": 3, "task_id": 4, "title": "Populate sample board", "completed": true, "created_at": "2025-09-15T10:00:00.000Z", "updated_at": "2025-09-15T10:10:00.000Z" },
+      { "id": 4, "task_id": 4, "title": "Capture iPhone shots", "completed": false, "created_at": "2025-09-15T10:20:00.000Z", "updated_at": "2025-09-18T08:00:00.000Z" },
+      { "id": 5, "task_id": 5, "title": "Call clinic", "completed": false, "created_at": "2025-09-09T12:15:00.000Z", "updated_at": "2025-09-09T12:15:00.000Z" },
+      { "id": 6, "task_id": 8, "title": "Check weather", "completed": false, "created_at": "2025-09-13T09:20:00.000Z", "updated_at": "2025-09-13T09:20:00.000Z" }
+    ]
+  },
+  "metadata": {
+    "totalTasks": 8,
+    "totalNotes": 4,
+    "totalSubTasks": 6,
+    "totalTags": 9
+  },
+  "data": {
+    "tasks": [
+      { "id": 1, "title": "Plan Q4 roadmap", "description": "Draft goals, align milestones, prepare deck.", "priority": "urgent", "status": "in_progress", "tags": ["@work", "planning", "q4"], "pending_on": null, "created_at": "2025-09-10T09:00:00.000Z", "updated_at": "2025-09-18T08:30:00.000Z" },
+      { "id": 2, "title": "Fix onboarding flow", "description": "Address edge cases and polish animations.", "priority": "high", "status": "todo", "tags": ["@work", "ui", "bugs"], "pending_on": null, "created_at": "2025-09-12T10:15:00.000Z", "updated_at": "2025-09-12T10:15:00.000Z" },
+      { "id": 3, "title": "Write release notes", "description": "Summarize changes and highlight iCloud sync.", "priority": "medium", "status": "done", "tags": ["@work", "release"], "pending_on": null, "created_at": "2025-09-11T14:00:00.000Z", "updated_at": "2025-09-16T17:45:00.000Z" },
+      { "id": 4, "title": "Prepare App Store screenshots", "description": "Capture iPhone & iPad shots with sample data.", "priority": "medium", "status": "in_progress", "tags": ["@work", "store", "design"], "pending_on": null, "created_at": "2025-09-15T09:30:00.000Z", "updated_at": "2025-09-18T08:00:00.000Z" },
+      { "id": 5, "title": "Book dentist appointment", "description": "Routine check-up. Prefer morning slot.", "priority": "low", "status": "todo", "tags": ["@home", "health"], "pending_on": null, "created_at": "2025-09-09T12:00:00.000Z", "updated_at": "2025-09-09T12:00:00.000Z" },
+      { "id": 6, "title": "Order groceries", "description": "Veggies, fruit, milk, coffee beans.", "priority": "medium", "status": "done", "tags": ["@home", "errands"], "pending_on": null, "created_at": "2025-09-08T18:00:00.000Z", "updated_at": "2025-09-13T10:20:00.000Z" },
+      { "id": 7, "title": "Follow up with design team", "description": "Waiting on final icon set delivery.", "priority": "high", "status": "pending", "tags": ["@work", "design"], "pending_on": "Awaiting assets from Design (due Fri)", "created_at": "2025-09-14T11:00:00.000Z", "updated_at": "2025-09-17T16:05:00.000Z" },
+      { "id": 8, "title": "Weekend hike planning", "description": "Pick trail, check weather, pack list.", "priority": "low", "status": "todo", "tags": ["@personal", "outdoors"], "pending_on": null, "created_at": "2025-09-13T09:10:00.000Z", "updated_at": "2025-09-13T09:10:00.000Z" }
+    ],
+    "notes": [
+      { "id": 1, "task_id": 1, "content": "Outline deck sections: Goals, Timeline, Metrics.", "created_at": "2025-09-16T08:00:00.000Z" },
+      { "id": 2, "task_id": 4, "content": "Use dark mode and light mode examples.", "created_at": "2025-09-17T13:20:00.000Z" },
+      { "id": 3, "task_id": 7, "content": "Pinged design on Slack. ETA Friday.", "created_at": "2025-09-17T16:00:00.000Z" },
+      { "id": 4, "task_id": 5, "content": "Check insurance coverage for cleaning.", "created_at": "2025-09-12T09:30:00.000Z" }
+    ],
+    "subtasks": [
+      { "id": 1, "task_id": 1, "title": "Draft goals", "completed": true, "created_at": "2025-09-10T09:30:00.000Z", "updated_at": "2025-09-10T09:45:00.000Z" },
+      { "id": 2, "task_id": 1, "title": "Define milestones", "completed": false, "created_at": "2025-09-10T10:00:00.000Z", "updated_at": "2025-09-17T08:45:00.000Z" },
+      { "id": 3, "task_id": 4, "title": "Populate sample board", "completed": true, "created_at": "2025-09-15T10:00:00.000Z", "updated_at": "2025-09-15T10:10:00.000Z" },
+      { "id": 4, "task_id": 4, "title": "Capture iPhone shots", "completed": false, "created_at": "2025-09-15T10:20:00.000Z", "updated_at": "2025-09-18T08:00:00.000Z" },
+      { "id": 5, "task_id": 5, "title": "Call clinic", "completed": false, "created_at": "2025-09-09T12:15:00.000Z", "updated_at": "2025-09-09T12:15:00.000Z" },
+      { "id": 6, "task_id": 8, "title": "Check weather", "completed": false, "created_at": "2025-09-13T09:20:00.000Z", "updated_at": "2025-09-13T09:20:00.000Z" }
+    ]
+  },
+  "exported_at": "2025-09-18T10:00:00.000Z",
+  "app_name": "Kanban Todo Board"
+}
+
+

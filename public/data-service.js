@@ -9,6 +9,10 @@ class DataService {
         this.nextNoteId = 1;
         this.nextSubtaskId = 1;
         this.autoSyncInterval = null;
+        // Debounce state for coalescing frequent saves (e.g., multiple quick CRUD ops)
+        this._saveDebounceMs = 300;
+        this._saveScheduled = null;
+        this._saveWaiters = [];
     }
 
     async init() {
@@ -70,6 +74,10 @@ class DataService {
                     if (cloudData && cloudData.hasOwnProperty('tasks')) {
                         console.log('Found proper iCloud data, importing...');
                         await this.importData({ data: cloudData }, { clearExisting: true });
+                        // Ensure local lastSync source-of-truth is updated immediately
+                        if (cloudData && cloudData.lastSync) {
+                            this.setLastSyncTime(cloudData.lastSync);
+                        }
                         // Trigger UI refresh after initial import
                         if (window.app && window.app.loadTasks) {
                             console.log('Triggering UI refresh after initial import...');
@@ -178,6 +186,12 @@ class DataService {
                 subtasks: this.subtasks.length,
                 lastSync: lastSync ? lastSync.toLocaleString() : 'Never'
             });
+            // Set local lastSync immediately to align auto-sync comparisons
+            try {
+                if (lastSyncResult && lastSyncResult.value) {
+                    this.setLastSyncTime(lastSyncResult.value);
+                }
+            } catch (_) {}
             
         } catch (error) {
             console.error('Error loading from iCloud:', error);
@@ -198,38 +212,60 @@ class DataService {
     }
 
     async saveToStorage() {
-        try {
-            if (this.isCapacitor) {
-                await this.saveToiCloud();
-                // Also save to proper iCloud for cross-device sync (NSUbiquitousKeyValueStore via proper plugin)
-                if (window.iCloudSyncProper) {
-                    console.log('Saving to proper iCloud...');
-                    const exportData = await this.exportData();
-
-                    // Check iCloud availability first
-                    const iCloudStatus = await window.iCloudSyncProper.checkiCloudAvailability();
-                    console.log('Proper iCloud availability check:', iCloudStatus);
-
-                    const success = await window.iCloudSyncProper.saveToiCloud(exportData.data);
-                    console.log('Proper iCloud save result:', success);
-                    // After a successful save, update last sync time for accurate comparisons
-                    try {
-                        if (success && exportData && exportData.exported_at) {
-                            this.setLastSyncTime(exportData.exported_at);
-                        } else {
-                            this.setLastSyncTime(new Date().toISOString());
-                        }
-                    } catch (_) {}
-                } else {
-                    console.log('Proper iCloud sync service not available');
-                }
-            } else {
-                await this.saveToLocalStorage();
+        // Debounce/coalesce frequent saves into a single write operation
+        const schedule = (action) => new Promise((resolve, reject) => {
+            this._saveWaiters.push({ resolve, reject });
+            if (this._saveScheduled) {
+                clearTimeout(this._saveScheduled);
             }
-        } catch (error) {
-            console.error('Error in saveToStorage:', error);
-            throw error; // Re-throw so calling functions know the save failed
-        }
+            this._saveScheduled = setTimeout(async () => {
+                const waiters = this._saveWaiters.splice(0);
+                this._saveScheduled = null;
+                try {
+                    await action();
+                    waiters.forEach(w => w.resolve());
+                } catch (e) {
+                    waiters.forEach(w => w.reject(e));
+                }
+            }, this._saveDebounceMs);
+        });
+
+        const action = async () => {
+            try {
+                if (this.isCapacitor) {
+                    await this.saveToiCloud();
+                    // Also save to proper iCloud for cross-device sync (NSUbiquitousKeyValueStore via proper plugin)
+                    if (window.iCloudSyncProper) {
+                        console.log('Saving to proper iCloud...');
+                        const exportData = await this.exportData();
+
+                        // Check iCloud availability first
+                        const iCloudStatus = await window.iCloudSyncProper.checkiCloudAvailability();
+                        console.log('Proper iCloud availability check:', iCloudStatus);
+
+                        const success = await window.iCloudSyncProper.saveToiCloud(exportData.data);
+                        console.log('Proper iCloud save result:', success);
+                        // After a successful save, update last sync time for accurate comparisons
+                        try {
+                            if (success && exportData && exportData.exported_at) {
+                                this.setLastSyncTime(exportData.exported_at);
+                            } else {
+                                this.setLastSyncTime(new Date().toISOString());
+                            }
+                        } catch (_) {}
+                    } else {
+                        console.log('Proper iCloud sync service not available');
+                    }
+                } else {
+                    await this.saveToLocalStorage();
+                }
+            } catch (error) {
+                console.error('Error in saveToStorage:', error);
+                throw error; // Re-throw so calling functions know the save failed
+            }
+        };
+
+        return schedule(action);
     }
 
     async saveToiCloud() {

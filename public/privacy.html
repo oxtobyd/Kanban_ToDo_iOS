@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Privacy Policy - ToDo Kanban</title>
+    <meta name="theme-color" content="#667eea">
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 0; color: #0f172a; }
+        .container { max-width: 800px; margin: 0 auto; padding: 24px; }
+        h1 { font-size: 28px; margin: 0 0 12px; }
+        h2 { font-size: 18px; margin: 24px 0 8px; }
+        p { line-height: 1.6; margin: 10px 0; }
+        ul { margin: 8px 0 8px 18px; }
+        .muted { color: #475569; font-size: 14px; }
+        a { color: #4f46e5; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        .card { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px; }
+    </style>
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+    <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <h1>Privacy Policy</h1>
+            <p class="muted">Last updated: <span id="pp-date"></span></p>
+
+            <p>ToDo Kanban (“the App”) is designed to store your data on your devices and in your personal iCloud account so your tasks sync between your Apple devices. We do not operate a cloud service and we do not collect your data.</p>
+
+            <h2>Data We Store</h2>
+            <p>The App stores the following user-provided content:</p>
+            <ul>
+                <li>Tasks, tags, statuses, and priorities</li>
+                <li>Sub-tasks</li>
+                <li>Notes you add to tasks</li>
+            </ul>
+            <p>This data is stored locally on your device and synced via Apple iCloud under your Apple ID using Apple frameworks.</p>
+
+            <h2>How Sync Works</h2>
+            <p>Sync is handled by Apple’s iCloud Key-Value store mechanisms. Your data is associated with your Apple ID and is not accessible to us. You can disable iCloud for the App in iOS Settings if you prefer to keep data only on-device.</p>
+
+            <h2>Data Collection</h2>
+            <p>The App does <strong>not</strong> collect personal information, analytics, or usage data. We do not track you and we do not share data with third parties.</p>
+
+            <h2>Third-Party Services</h2>
+            <p>Apple iCloud is used solely to sync your data between devices you own. Apple’s privacy policy governs the handling of data stored in iCloud.</p>
+
+            <h2>Your Choices</h2>
+            <ul>
+                <li>Disable iCloud for the App in iOS Settings to keep data on a single device.</li>
+                <li>Export your data to a JSON file within the App at any time.</li>
+                <li>Delete the App to remove local data from a device. Data in iCloud can be removed via iOS Settings → Apple ID → iCloud → Manage Storage.</li>
+            </ul>
+
+            <h2>Contact</h2>
+            <p>Questions? Contact: <a href="mailto:support@fynesystems.com">support@fynesystems.com</a></p>
+        </div>
+    </div>
+    <script>
+        (function(){
+            try {
+                var el = document.getElementById('pp-date');
+                var d = new Date();
+                el.textContent = d.toLocaleDateString();
+            } catch(e) {}
+        })();
+    </script>
+    
+    
+</body>
+</html>
+

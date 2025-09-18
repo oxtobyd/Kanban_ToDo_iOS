@@ -655,6 +655,16 @@ body[data-theme="dark"] .file-upload-area {
 }
 body[data-theme="dark"] .file-upload-area:hover { background: rgba(99, 102, 241, 0.08); }
 body[data-theme="dark"] .import-warning { background: #78350f22; color: #fbbf24; border-color: #f59e0b; }
+body[data-theme="dark"] .upload-content svg { color: #94a3b8; }
+body[data-theme="dark"] .upload-content p { color: #cbd5e1; }
+body[data-theme="dark"] .file-info { color: #94a3b8; }
+body[data-theme="dark"] .file-name { color: #e5e7eb; }
+body[data-theme="dark"] .remove-file { color: #94a3b8; }
+body[data-theme="dark"] .remove-file:hover { color: #f87171; }
+body[data-theme="dark"] .import-preview h4 { color: #e5e7eb; }
+body[data-theme="dark"] .stat-item { background: #0f172a; border-color: #334155; }
+body[data-theme="dark"] .stat-label { color: #94a3b8; }
+body[data-theme="dark"] .stat-value { color: #e5e7eb; }
 
 /* Print modal option cards */
 body[data-theme="dark"] .option-card { background: rgba(15, 23, 42, 0.9); border-color: #334155; }
