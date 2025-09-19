@@ -110,6 +110,7 @@
                             <path d="M23 4v6h-6"></path>
                             <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
                         </svg>
+                        <span class="sync-status-indicator" id="syncStatusIndicator"></span>
                     </button>
                 </div>
                 <button class="add-task-btn" onclick="app.openTaskModal()" title="Add Task">
@@ -326,7 +327,7 @@
             </div>
             <div class="notes-container">
                 <div class="add-note">
-                    <textarea id="newNote" placeholder="Add a note... (or drag & drop files here)" rows="2"></textarea>
+                    <textarea id="newNote" placeholder="Add a note..." rows="2"></textarea>
                     <button onclick="app.addNote()">Add Note</button>
                 </div>
                 <div class="notes-list" id="notesList"></div>
@@ -356,14 +357,23 @@
     <script type="module" src="https://unpkg.com/@capacitor/core@latest/dist/capacitor.esm.js"></script>
     <script nomodule src="https://unpkg.com/@capacitor/core@latest/dist/capacitor.js"></script>
     
-    <!-- Proper iCloud Sync Service (in use) -->
-    <script src="icloud-sync-proper.js"></script>
+    <!-- Robust iCloud Sync Service (Apple standard) -->
+    <script src="icloud-sync-robust.js"></script>
     
-    <!-- Data Service -->
-    <script src="data-service.js"></script>
+    <!-- Robust Data Service -->
+    <script src="data-service-robust.js"></script>
+    
+    <!-- Sync Migration Script -->
+    <script src="sync-migration.js"></script>
+    
+    <!-- Sync Test Script -->
+    <script src="sync-test.js"></script>
     
     <!-- Sync Debug Script -->
     <script src="sync-debug.js"></script>
+    
+    <!-- Sync Validator Script -->
+    <script src="sync-validator.js"></script>
     
     <!-- Import Modal -->
     <div class="modal" id="importModal" role="dialog" aria-modal="true" aria-labelledby="importModalTitle">

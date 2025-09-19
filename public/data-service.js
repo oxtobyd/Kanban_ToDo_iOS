@@ -413,6 +413,10 @@ class DataService {
         };
         
         this.tasks.push(task);
+        
+        // Ensure IDs are properly incremented to prevent conflicts
+        this.nextTaskId = Math.max(this.nextTaskId, ...this.tasks.map(t => t.id || 0)) + 1;
+        
         await this.saveToStorage();
         return task;
     }

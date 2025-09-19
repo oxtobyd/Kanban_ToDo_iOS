@@ -62,14 +62,9 @@ class TodoApp {
         // Wait for Capacitor to be ready
         if (window.Capacitor) {
             try {
-                if (window.Capacitor.Plugins && window.Capacitor.Plugins.App) {
-                    await window.Capacitor.Plugins.App.addListener('appStateChange', (state) => {
-                        if (state.isActive) {
-                            // App became active, reload data in case it was synced from another device
-                            this.loadTasks();
-                        }
-                    });
-                }
+                // App state change handling is now managed by RobustDataService
+                // which automatically syncs when the app becomes active
+                // Capacitor ready, robust sync will handle app state changes
             } catch (error) {
                 // Continue without the listener - not critical
             }
@@ -78,17 +73,32 @@ class TodoApp {
         // Prepare Haptics plugin if present
         this.haptics = (window.Capacitor && (window.Capacitor.Plugins && (window.Capacitor.Plugins.Haptics || window.Capacitor.Plugins.HapticsPlugin))) || null;
 
+        // Initialize robust iCloud sync first
+        if (window.RobustiCloudSync) {
+            await window.RobustiCloudSync.init();
+        }
+
         // Initialize data service
-        await window.dataService.init();
+        await window.RobustDataService.init();
+
+        // Register for data change notifications to refresh UI
+        window.__suppressNextAutoRefresh = false;
+        window.RobustDataService.addChangeListener(() => {
+            if (window.__suppressNextAutoRefresh) {
+                window.__suppressNextAutoRefresh = false;
+                return;
+            }
+            this.loadTasks();
+        });
         // Bust any cached assets by appending a cache-busting param to fetches if needed
-        
+
         // Apply saved theme
         try {
             const savedTheme = localStorage.getItem('ui-theme');
             if (savedTheme === 'dark' || savedTheme === 'light') {
                 document.body.setAttribute('data-theme', savedTheme);
             }
-        } catch (_) {}
+        } catch (_) { }
 
         // Restore last selected category if present
         try {
@@ -100,7 +110,7 @@ class TodoApp {
                 saved = localStorage.getItem('currentCategoryTag') || '';
             }
             this.currentCategoryTag = saved || null;
-        } catch (_) {}
+        } catch (_) { }
 
         await this.loadTags();
         // If a category is saved, prime includeTags accordingly before first load
@@ -113,7 +123,7 @@ class TodoApp {
         this.setupTouchGestures();
         this.setupTagsInput();
         this.setupFileDragAndDrop();
-        
+
         // Handle screen size changes (e.g., device rotation)
         window.addEventListener('resize', () => {
             this.updateDragAndDropForScreenSize();
@@ -123,7 +133,8 @@ class TodoApp {
         this.syncUIState();
         this.setupMobileUI();
         this.updateThemeToggleVisual();
-        this.updateFilterButtonIndicator();
+        // Start sync health monitoring
+        this.startSyncHealthMonitoring();
         // Inject a style to disable text selection while dragging
         if (!document.getElementById('no-text-select-style')) {
             const style = document.createElement('style');
@@ -144,7 +155,7 @@ class TodoApp {
         const current = document.body.getAttribute('data-theme') || 'light';
         const next = current === 'dark' ? 'light' : 'dark';
         document.body.setAttribute('data-theme', next);
-        try { localStorage.setItem('ui-theme', next); } catch (_) {}
+        try { localStorage.setItem('ui-theme', next); } catch (_) { }
         this.updateThemeToggleVisual();
         this.hapticImpact('light');
     }
@@ -153,12 +164,12 @@ class TodoApp {
         const btn = document.getElementById('themeToggleBtn');
         const mobileBtn = document.getElementById('mobileThemeToggleBtn');
         const theme = document.body.getAttribute('data-theme') || 'light';
-        
+
         if (btn) {
             btn.setAttribute('aria-pressed', theme === 'dark' ? 'true' : 'false');
             btn.title = theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode';
         }
-        
+
         if (mobileBtn) {
             mobileBtn.setAttribute('aria-pressed', theme === 'dark' ? 'true' : 'false');
             mobileBtn.title = theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode';
@@ -174,7 +185,7 @@ class TodoApp {
             } else if (H.selectionChanged) {
                 await H.selectionChanged();
             }
-        } catch (_) {}
+        } catch (_) { }
     }
 
     toggleMobileSearch() {
@@ -188,7 +199,7 @@ class TodoApp {
                 input.value = this.currentSearch || '';
                 setTimeout(() => input.focus(), 50);
             }
-            
+
             // Sync tag options with current available tags
             const mobileTag = document.getElementById('mobileTag');
             if (mobileTag) {
@@ -198,7 +209,7 @@ class TodoApp {
                     mobileTag.value = this.currentIncludeTags[0];
                 }
             }
-            
+
             // Sync priority filter
             const mobilePriority = document.getElementById('mobilePriority');
             if (mobilePriority) {
@@ -220,13 +231,11 @@ class TodoApp {
 
     async manualSync() {
         if (!window.Capacitor || !window.Capacitor.isNativePlatform()) {
-            console.log('Manual sync only available on native platforms');
             return;
         }
 
         try {
-            console.log('Manual sync requested...');
-            
+
             // Show sync indicator
             const syncBtn = document.querySelector('.sync-btn');
             if (syncBtn) {
@@ -234,15 +243,43 @@ class TodoApp {
                 syncBtn.disabled = true;
             }
 
-            // Delegate to centralized data service manual sync, which uses the proper iCloud plugin
-            if (window.dataService && window.dataService.manualSync) {
-                await window.dataService.manualSync();
+            // Validate data integrity before sync
+            if (window.RobustDataService && window.RobustDataService.validateDataIntegrity) {
+                const validation = await window.RobustDataService.validateDataIntegrity();
+                if (!validation.isValid) {
+                    console.warn('Data integrity issues found:', validation.issues);
+                }
+            }
+
+            // Delegate to centralized data service manual sync
+            if (window.RobustDataService && window.RobustDataService.manualSync) {
+                await window.RobustDataService.manualSync();
+
+                // Validate data integrity after sync
+                if (window.RobustDataService.validateDataIntegrity) {
+                    const postSyncValidation = await window.RobustDataService.validateDataIntegrity();
+                    if (!postSyncValidation.isValid) {
+                        console.error('Data integrity issues after sync:', postSyncValidation.issues);
+                    }
+                }
+
+                // Manual sync completed successfully
+                this.updateSyncStatusIndicator('healthy');
             } else {
-                console.error('Data service manualSync not available');
+                console.error('Robust data service manualSync not available');
+                this.updateSyncStatusIndicator('error');
             }
 
         } catch (error) {
             console.error('Manual sync failed:', error);
+            this.updateSyncStatusIndicator('error');
+            // Show user-friendly error
+            if (window.Capacitor && window.Capacitor.Plugins.Toast) {
+                window.Capacitor.Plugins.Toast.show({
+                    text: 'Sync failed. Please check your iCloud connection.',
+                    duration: 'long'
+                });
+            }
         } finally {
             // Remove sync indicator
             const syncBtn = document.querySelector('.sync-btn');
@@ -253,32 +290,35 @@ class TodoApp {
         }
     }
 
+
+
+
+
     async loadTasks(priority = null, sortBy = null, search = null, includeTags = null, excludeTags = null, forceRefresh = false) {
         try {
             // Check if user is actively typing in an input field
             const activeElement = document.activeElement;
             const isTypingInInput = activeElement && (
-                activeElement.tagName === 'INPUT' || 
+                activeElement.tagName === 'INPUT' ||
                 activeElement.tagName === 'TEXTAREA' ||
                 activeElement.contentEditable === 'true'
             );
-            
+
             // If user is typing and this isn't a forced refresh, skip the refresh
             if (isTypingInInput && !forceRefresh) {
-                console.log('Skipping UI refresh - user is typing in input field');
                 return;
             }
-            
+
             // Use provided values or keep current state
             if (priority !== null) this.currentPriority = priority;
             if (sortBy !== null) this.currentSortBy = sortBy;
             if (search !== null) this.currentSearch = search;
             if (includeTags !== null) this.currentIncludeTags = Array.isArray(includeTags) ? includeTags : (includeTags ? [includeTags] : []);
             if (excludeTags !== null) this.currentExcludeTags = Array.isArray(excludeTags) ? excludeTags : (excludeTags ? [excludeTags] : []);
-            
+
             // Sync UI dropdowns with current state
             this.syncUIState();
-            
+
             const filters = {
                 priority: this.currentPriority || undefined,
                 sortBy: this.currentSortBy,
@@ -286,8 +326,8 @@ class TodoApp {
                 includeTags: this.currentIncludeTags,
                 excludeTags: this.currentExcludeTags
             };
-            
-            this.tasks = await window.dataService.getTasks(filters);
+
+            this.tasks = await window.RobustDataService.getTasks(filters);
             this.renderTasks();
             await this.buildCategoryTabs();
             this.updateFilterButtonIndicator();
@@ -298,7 +338,7 @@ class TodoApp {
 
     async loadTags() {
         try {
-            this.availableTags = await window.dataService.getTags();
+            this.availableTags = await window.RobustDataService.getTags();
             this.updateTagFilter();
             await this.buildCategoryTabs();
         } catch (error) {
@@ -316,7 +356,7 @@ class TodoApp {
             } else {
                 localStorage.setItem('currentCategoryTag', this.currentCategoryTag || '');
             }
-        } catch (_) {}
+        } catch (_) { }
     }
 
     async buildCategoryTabs() {
@@ -324,8 +364,8 @@ class TodoApp {
         if (!container) return;
 
         // Build from ALL known tags and ALL tasks (so counts don't change with filtering)
-        const allTags = await window.dataService.getTags();
-        const allTasks = await window.dataService.getTasks({});
+        const allTags = await window.RobustDataService.getTags();
+        const allTasks = await window.RobustDataService.getTasks({});
         const categories = (Array.isArray(allTags) ? allTags : [])
             .filter(t => typeof t === 'string' && t.startsWith('@'))
             .sort((a, b) => a.localeCompare(b));
@@ -367,7 +407,7 @@ class TodoApp {
         const excludeTagsFilter = document.getElementById('excludeTagsFilter');
         const searchInput = document.getElementById('searchInput');
         const clearSearch = document.getElementById('clearSearch');
-        
+
         if (priorityFilter) {
             priorityFilter.value = this.currentPriority;
             priorityFilter.classList.toggle('filter-active', !!this.currentPriority);
@@ -415,7 +455,7 @@ class TodoApp {
             option.selected = prevExclude.has(tag);
             excludeTagsFilter.appendChild(option);
         });
-        
+
         // Update floating tag filter if it exists and is visible
         if (this.isDesktop()) {
             const floatingFilter = document.getElementById('floatingTagFilter');
@@ -430,7 +470,7 @@ class TodoApp {
         if (this.searchTimeout) {
             clearTimeout(this.searchTimeout);
         }
-        
+
         // Debounce search
         this.searchTimeout = setTimeout(() => {
             this.currentSearch = searchTerm.trim();
@@ -458,20 +498,20 @@ class TodoApp {
 
     async renderTasks() {
         const columns = ['todo', 'in_progress', 'pending', 'done'];
-        
+
         for (const status of columns) {
             const list = document.getElementById(`${status}-list`);
             const tasks = this.tasks.filter(task => task.status === status);
-            
+
             const taskHTMLPromises = tasks.map(task => this.createTaskHTML(task));
             const taskHTMLs = await Promise.all(taskHTMLPromises);
             list.innerHTML = taskHTMLs.join('');
-            
+
             // Update task count
             const countElement = document.querySelector(`[data-status="${status}"] .task-count`);
             countElement.textContent = tasks.length;
         }
-        
+
         // Add touch feedback to all task action buttons on mobile
         if (window.matchMedia && window.matchMedia('(max-width: 768px)').matches) {
             setTimeout(() => {
@@ -479,7 +519,7 @@ class TodoApp {
                 taskActionButtons.forEach(button => this.addTouchFeedback(button));
             }, 100);
         }
-        
+
         // Update drag and drop based on current screen size
         this.updateDragAndDropForScreenSize();
     }
@@ -492,19 +532,19 @@ class TodoApp {
             document.body.setAttribute('data-mobile-column', this.mobileColumn);
             if (bottomBar) bottomBar.style.display = 'flex';
             if (fab) fab.style.display = 'block';
-            
+
             // Add touch feedback to mobile elements
             setTimeout(() => {
                 const mobileSegments = document.querySelectorAll('.mobile-segment');
                 mobileSegments.forEach(segment => this.addTouchFeedback(segment));
-                
+
                 const mobileSearchBtn = document.querySelector('.mobile-search-btn');
                 const mobileThemeBtn = document.querySelector('.mobile-theme-btn');
                 const mobileMenuBtn = document.querySelector('.mobile-menu-btn');
                 const moCloseBtn = document.querySelector('.mo-close');
                 const moClearBtn = document.querySelector('.mo-clear-btn');
                 const logo = document.querySelector('.logo');
-                
+
                 if (mobileSearchBtn) this.addTouchFeedback(mobileSearchBtn);
                 if (mobileThemeBtn) this.addTouchFeedback(mobileThemeBtn);
                 if (mobileMenuBtn) this.addTouchFeedback(mobileMenuBtn);
@@ -513,7 +553,7 @@ class TodoApp {
                 if (logo) this.addTouchFeedback(logo);
                 if (fab) this.addTouchFeedback(fab);
             }, 100);
-            
+
             this.updateMobileSegments();
         } else {
             if (bottomBar) {
@@ -568,44 +608,44 @@ class TodoApp {
         const priorityClass = `priority-${task.priority || 'medium'}`;
         const priorityLabel = this.getPriorityLabel(task.priority || 'medium');
         const isExpanded = this.expandedTasks && this.expandedTasks.has(task.id);
-        
+
         // Make URLs clickable and highlight search terms
         let title = this.makeUrlsClickable(task.title);
         let description = this.makeUrlsClickable(task.description || '');
-        
+
         if (this.currentSearch) {
             const searchRegex = new RegExp(`(${this.escapeRegex(this.currentSearch)})`, 'gi');
             title = title.replace(searchRegex, '<span class="search-highlight">$1</span>');
             description = description.replace(searchRegex, '<span class="search-highlight">$1</span>');
         }
-        
+
         // Render tags
-        const tagsHTML = (task.tags && task.tags.length > 0) ? 
+        const tagsHTML = (task.tags && task.tags.length > 0) ?
             `<div class="task-tags">
                 ${task.tags.map(tag => `<span class="task-tag">${this.escapeHtml(tag)}</span>`).join('')}
             </div>` : '';
-        
+
         // Render pending reason if task is pending
         const pendingReasonHTML = (task.status === 'pending') ?
             `<div class="pending-reason">
                 <strong>Pending on:</strong> ${task.pending_on ? this.escapeHtml(task.pending_on) : '<em>No reason specified</em>'}
             </div>` : '';
-        
+
         // Get sub-tasks for this task
         const subtasksHTML = await this.renderSubtasks(task.id);
-        
+
         return `
             <div class="task-card ${priorityClass} ${isExpanded ? 'expanded' : ''}" draggable="${this.isDragAndDropEnabled() ? 'true' : 'false'}" data-task-id="${task.id}">
-                <div class="task-header">
-                    <div class="task-title" onclick="app.toggleTaskExpansion(${task.id})" title="Click to expand/collapse task details">${title}</div>
-                    <div class="task-header-actions">
+                <div class="task-header" onclick="app.toggleTaskExpansion(${task.id})" title="Click to expand/collapse task details">
+                    <div class="task-title">${title}</div>
+                    <div class="task-header-actions" onclick="event.stopPropagation()">
                         <div class="priority-badge priority-${task.priority || 'medium'}" onclick="app.showPriorityDropdown(event, ${task.id}, '${task.priority || 'medium'}')" title="Click to change priority">${priorityLabel}</div>
                         <div class="drag-handle">⋮⋮</div>
                     </div>
                 </div>
                 <div class="task-description">${description}</div>
-                ${tagsHTML}
-                ${pendingReasonHTML}
+                <div>${tagsHTML}</div>
+                <div>${pendingReasonHTML}</div>
                 ${subtasksHTML}
                 <div class="task-meta">
                     <span>${createdDate}</span>
@@ -641,25 +681,21 @@ class TodoApp {
 
     async renderSubtasks(taskId) {
         try {
-            const subtasks = await window.dataService.getSubtasks(taskId);
+            const subtasks = await window.RobustDataService.getSubtasks(taskId);
             const completedCount = subtasks.filter(st => st.completed).length;
             const totalCount = subtasks.length;
-            
+
             return `
                 <div class="subtasks-section">
-                    <div class="subtasks-header" onclick="app.toggleSubtasksVisibility(${taskId})">
+                    <div class="subtasks-header" onclick="app.toggleSubtasksVisibility(${taskId}, event)" title="Click to expand/collapse subtasks">
                         <span class="subtasks-progress">${totalCount > 0 ? `${completedCount}/${totalCount} subtasks` : 'Sub-tasks'}</span>
-                        <button class="toggle-subtasks-btn" title="Toggle subtasks">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <polyline points="6,9 12,15 18,9"></polyline>
-                            </svg>
-                        </button>
+                        <span class="subtasks-toggle-indicator" id="toggle-indicator-${taskId}">▼</span>
                     </div>
                     <div class="subtasks-list" id="subtasks-${taskId}" style="display: block;">
                         ${subtasks.map(subtask => `
-                            <div class="subtask-item ${subtask.completed ? 'completed' : ''}">
-                                <input type="checkbox" ${subtask.completed ? 'checked' : ''} 
-                                       onchange="app.toggleSubtask(${subtask.id})" />
+                            <div class="subtask-item ${subtask.completed ? 'completed' : ''}" id="subtask-item-${subtask.id}">
+                                <input id="subtask-checkbox-${subtask.id}" data-subtask-id="${subtask.id}" type="checkbox" ${subtask.completed ? 'checked' : ''} 
+                                       onchange="app.toggleSubtask(${subtask.id}, this.checked)" />
                                 <span class="subtask-title" ondblclick="app.editSubtask(${subtask.id}, '${this.escapeHtml(subtask.title).replace(/'/g, "\\'")}')">
                                     ${this.makeUrlsClickable(subtask.title)}
                                 </span>
@@ -667,7 +703,7 @@ class TodoApp {
                             </div>
                         `).join('')}
                         <div class="add-subtask">
-                            <input type="text" id="new-subtask-${taskId}" placeholder="Add sub-task... (or drag & drop files)" 
+                            <input type="text" id="new-subtask-${taskId}" placeholder="Add sub-task..." 
                                    onkeypress="if(event.key==='Enter') app.addSubtaskFromInput(${taskId})">
                             <button onclick="app.addSubtaskFromInput(${taskId})" class="add-subtask-btn">Add</button>
                         </div>
@@ -702,25 +738,22 @@ class TodoApp {
 
     makeUrlsClickable(text) {
         if (!text) return text;
-        
+
         // First escape HTML to prevent XSS
         const escapedText = this.escapeHtml(text);
-        
+
         // Process file attachments FIRST to avoid URL regex interference
         const fileRegex = /\[File: ([^\]]+)\]\((file:[^)]+)\)/g;
         let result = escapedText.replace(fileRegex, (match, fileName, fileUri) => {
-            console.log('Processing file link:', { match, fileName, fileUri });
             // Clean up the file URI if it has extra text
             const cleanUri = fileUri.replace(/^[^f]*file:\/\//, 'file://');
-            console.log('Cleaned URI:', cleanUri);
             // Escape, then inline onclick so the anchor itself is clickable anywhere
             const safeText = this.escapeHtml(fileName).replace(/"/g, '&quot;');
             const safeUri = this.escapeHtml(cleanUri).replace(/"/g, '&quot;');
             const linkHtml = `<a class="file-link" href="#" title="${safeText}" onclick="app.openFile('${safeUri}','${safeText}'); return false;">📎 ${safeText}</a>`;
-            console.log('Generated link HTML:', linkHtml);
             return linkHtml;
         });
-        
+
         // Then detect URLs and make them clickable (but avoid already processed file links)
         const urlRegex = /(https?:\/\/[^\s<>"']+|www\.[^\s<>"']+|[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}[^\s<>"']*)/g;
         result = result.replace(urlRegex, (url) => {
@@ -734,7 +767,7 @@ class TodoApp {
             }
             return `<a class="file-link" href="${href}" target="_blank" rel="noopener">${url}</a>`;
         });
-        
+
         return result;
     }
 
@@ -818,9 +851,9 @@ class TodoApp {
                         return;
                     }
                     if (isCatalyst) {
-                        try { window.open(uri, '_blank'); return; } catch(_) {}
+                        try { window.open(uri, '_blank'); return; } catch (_) { }
                     }
-                } catch (_) {}
+                } catch (_) { }
             }
 
             // FileViewer expects a local filesystem path (no file:// scheme)
@@ -830,7 +863,7 @@ class TodoApp {
                     await plugins.FileViewer.openDocumentFromLocalPath({ path: localPath, mimeType: contentType || undefined });
                     this.showNotification(`Opening ${nameFromUri}...`, 'success');
                     return;
-                } catch (_) {}
+                } catch (_) { }
             }
 
             // Try FileOpener with explicit contentType and full URI
@@ -839,13 +872,13 @@ class TodoApp {
                     await plugins.FileOpener.openFile({ path: decodedUri, contentType: contentType || undefined });
                     this.showNotification(`Opening ${nameFromUri}...`, 'success');
                     return;
-                } catch (_) {}
+                } catch (_) { }
             }
 
             // (Share dialog intentionally disabled to open directly in app)
 
             // Last fallback: browser open
-            try { window.open(decodedUri, '_blank'); } catch(_) {}
+            try { window.open(decodedUri, '_blank'); } catch (_) { }
             this.showNotification(`Opening ${nameFromUri}...`, 'success');
         } catch (error) {
             console.error('Error opening file:', error);
@@ -865,7 +898,7 @@ class TodoApp {
             if (uri && uri.startsWith('file:')) {
                 this.openFile(uri, name);
             }
-        } catch (_) {}
+        } catch (_) { }
     }
 
     setupEventListeners() {
@@ -910,7 +943,7 @@ class TodoApp {
             }
             // Arrow key navigation for bottom tabs on mobile
             if (window.matchMedia && window.matchMedia('(max-width: 768px)').matches) {
-                const order = ['todo','in_progress','pending','done'];
+                const order = ['todo', 'in_progress', 'pending', 'done'];
                 const idx = order.indexOf(this.mobileColumn);
                 if (e.key === 'ArrowRight') {
                     const next = order[(idx + 1) % order.length];
@@ -937,40 +970,8 @@ class TodoApp {
         // Initialize ARIA selected states
         this.updateAriaForTabs();
 
-        // Expand/collapse task card on single click anywhere in the card
-        // while preserving interactions on interactive elements
-        document.addEventListener('click', (e) => {
-            const taskCard = e.target.closest('.task-card');
-            if (!taskCard) return;
-
-            // Ignore if click originated on interactive controls or within them
-            const interactiveSelectors = [
-                '.task-actions',
-                '.task-actions button',
-                '.notes-btn',
-                '.edit-btn',
-                '.delete-btn',
-                '.task-title',
-                '.priority-badge',
-                '.priority-dropdown',
-                '.priority-option',
-                'a',
-                'input',
-                'textarea',
-                'select',
-                'button',
-            ];
-            if (interactiveSelectors.some(sel => e.target.closest(sel))) return;
-
-            // Do not toggle while dragging or in swipe gesture
-            if (this.isDragging || this.isSwiping) return;
-
-            const taskId = parseInt(taskCard.getAttribute('data-task-id'));
-            if (!Number.isFinite(taskId)) return;
-
-            // Toggle expansion
-            this.toggleTaskExpansion(taskId);
-        });
+        // Task expansion is now handled by clicking the task-header directly
+        // This prevents accidental expansion when interacting with subtasks or other elements
     }
 
     updateAriaForTabs() {
@@ -1030,7 +1031,7 @@ class TodoApp {
     updateColumnCollapseState(status) {
         const column = document.querySelector(`[data-status="${status}"]`);
         const toggleButton = document.querySelector(`[data-status="${status}"].collapse-toggle`);
-        
+
         if (this.columnStates[status]) {
             column.classList.add('collapsed');
             toggleButton.classList.add('collapsed');
@@ -1055,7 +1056,6 @@ class TodoApp {
     setupDragAndDrop() {
         // Only set up drag and drop for larger screens
         if (!this.isDragAndDropEnabled()) {
-            console.log('Drag and drop disabled for small mobile screens');
             return;
         }
 
@@ -1063,11 +1063,11 @@ class TodoApp {
             const card = e.target.closest('.task-card');
             if (card) {
                 card.classList.add('dragging');
-                try { e.dataTransfer.effectAllowed = 'move'; } catch (_) {}
+                try { e.dataTransfer.effectAllowed = 'move'; } catch (_) { }
                 e.dataTransfer.setData('text/plain', card.dataset.taskId);
                 this.isDragging = true;
                 document.body.classList.add('no-text-select');
-                
+
                 // Additional text selection prevention
                 document.body.style.userSelect = 'none';
                 document.body.style.webkitUserSelect = 'none';
@@ -1080,7 +1080,7 @@ class TodoApp {
                 card.classList.remove('dragging');
                 this.isDragging = false;
                 document.body.classList.remove('no-text-select');
-                
+
                 // Re-enable text selection after drag
                 document.body.style.userSelect = '';
                 document.body.style.webkitUserSelect = '';
@@ -1089,7 +1089,7 @@ class TodoApp {
 
         document.addEventListener('dragover', (e) => {
             e.preventDefault();
-            try { e.dataTransfer.dropEffect = 'move'; } catch (_) {}
+            try { e.dataTransfer.dropEffect = 'move'; } catch (_) { }
             const column = e.target.closest('.column');
             if (column) {
                 const taskList = column.querySelector('.task-list');
@@ -1113,7 +1113,7 @@ class TodoApp {
                 if (taskList) taskList.classList.remove('drag-over');
                 const taskId = e.dataTransfer.getData('text/plain');
                 const newStatus = column.dataset.status;
-                
+
                 // If dropping into pending column, ask for reason
                 if (newStatus === 'pending') {
                     this.showPendingReasonModal(taskId);
@@ -1132,12 +1132,12 @@ class TodoApp {
         // Update draggable attributes based on current screen size
         const taskCards = document.querySelectorAll('.task-card');
         const isEnabled = this.isDragAndDropEnabled();
-        
+
         taskCards.forEach(card => {
             card.draggable = isEnabled;
         });
-        
-        console.log(`Drag and drop ${isEnabled ? 'enabled' : 'disabled'} for current screen size`);
+
+        // Drag and drop updated for screen size
     }
 
     setupTouchGestures() {
@@ -1145,26 +1145,40 @@ class TodoApp {
             const taskCard = e.target.closest('.task-card');
             if (!taskCard) return;
 
+            // Don't start swipe detection if touching interactive elements
+            const interactiveElements = [
+                'input', 'button', 'select', 'textarea', 'a',
+                '.priority-badge', '.task-actions', '.subtask-item',
+                '.add-subtask', '.delete-subtask-btn'
+            ];
+
+            if (interactiveElements.some(selector => e.target.closest(selector))) {
+                return;
+            }
+
             this.touchStartX = e.touches[0].clientX;
             this.touchStartY = e.touches[0].clientY;
             this.touchEndX = this.touchStartX;
             this.touchEndY = this.touchStartY;
             this.isSwiping = false;
             this.hasMoved = false;
-            
+
             // Store the initial touch for drag mode detection
             this.initialTouch = {
                 x: e.touches[0].clientX,
                 y: e.touches[0].clientY,
                 time: Date.now()
             };
-            
+
             taskCard.classList.add('touch-active');
         }, { passive: false });
 
         document.addEventListener('touchmove', (e) => {
             const taskCard = e.target.closest('.task-card');
             if (!taskCard) return;
+
+            // Skip if we didn't start tracking this touch
+            if (!this.initialTouch) return;
 
             this.touchEndX = e.touches[0].clientX;
             this.touchEndY = e.touches[0].clientY;
@@ -1179,7 +1193,7 @@ class TodoApp {
             const deltaX = this.touchEndX - this.touchStartX;
             const deltaY = this.touchEndY - this.touchStartY;
             const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
-            
+
             // Mark as moved if distance is significant
             if (distance > 5) {
                 this.hasMoved = true;
@@ -1189,10 +1203,10 @@ class TodoApp {
             if (this.initialTouch && !this.isDragging && !this.isSwiping) {
                 const timeHeld = Date.now() - this.initialTouch.time;
                 const distanceMoved = Math.sqrt(
-                    Math.pow(e.touches[0].clientX - this.initialTouch.x, 2) + 
+                    Math.pow(e.touches[0].clientX - this.initialTouch.x, 2) +
                     Math.pow(e.touches[0].clientY - this.initialTouch.y, 2)
                 );
-                
+
                 // If held and moved, enter drag mode (only when drag-and-drop is enabled for screen size)
                 if (this.isDragAndDropEnabled() && timeHeld > 300 && distanceMoved > 10) {
                     e.preventDefault();
@@ -1205,13 +1219,13 @@ class TodoApp {
             if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 10) {
                 this.isSwiping = true;
                 e.preventDefault();
-                
+
                 const swipeProgress = Math.min(Math.abs(deltaX) / 100, 1);
                 const direction = deltaX > 0 ? 'right' : 'left';
-                
+
                 taskCard.style.transform = `translateX(${deltaX * 0.3}px)`;
                 taskCard.style.opacity = 1 - (swipeProgress * 0.3);
-                
+
                 taskCard.classList.remove('swiping-left', 'swiping-right');
                 taskCard.classList.add(`swiping-${direction}`);
             }
@@ -1220,6 +1234,9 @@ class TodoApp {
         document.addEventListener('touchend', (e) => {
             const taskCard = e.target.closest('.task-card');
             if (!taskCard) return;
+
+            // Skip if we didn't start tracking this touch
+            if (!this.initialTouch) return;
 
             // Handle drag end
             if (this.isDragging) {
@@ -1237,7 +1254,7 @@ class TodoApp {
             }
 
             taskCard.classList.remove('touch-active', 'swiping-left', 'swiping-right');
-            
+
             taskCard.style.transform = '';
             taskCard.style.opacity = '';
 
@@ -1248,12 +1265,12 @@ class TodoApp {
                 if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > this.swipeThreshold) {
                     const taskId = taskCard.dataset.taskId;
                     const currentTask = this.tasks.find(t => t.id == taskId);
-                    
+
                     if (currentTask) {
                         const newStatus = this.getNextStatus(currentTask.status, deltaX > 0);
                         if (newStatus !== currentTask.status) {
                             this.showSwipeAnimation(taskCard, deltaX > 0);
-                            
+
                             if (newStatus === 'pending') {
                                 this.showPendingReasonModal(taskId);
                             } else {
@@ -1274,7 +1291,7 @@ class TodoApp {
     getNextStatus(currentStatus, swipeRight) {
         const statusFlow = ['todo', 'in_progress', 'pending', 'done'];
         const currentIndex = statusFlow.indexOf(currentStatus);
-        
+
         if (swipeRight) {
             return currentIndex < statusFlow.length - 1 ? statusFlow[currentIndex + 1] : currentStatus;
         } else {
@@ -1286,21 +1303,21 @@ class TodoApp {
     enterDragMode(taskCard, touch) {
         this.isDragging = true;
         this.draggedTask = taskCard;
-        
+
         // Add haptic feedback if available
         if (navigator.vibrate) {
             navigator.vibrate(50);
         }
-        
+
         // Create drag preview
         this.createDragPreview(taskCard, touch);
-        
+
         // Add visual feedback
         taskCard.classList.add('mobile-dragging');
-        
+
         // Highlight drop zones
         this.highlightDropZones();
-        
+
         // Prevent scrolling
         document.body.style.overflow = 'hidden';
     }
@@ -1315,12 +1332,12 @@ class TodoApp {
         this.dragPreview.style.transform = 'scale(1.1)';
         this.dragPreview.style.opacity = '0.9';
         this.dragPreview.style.boxShadow = '0 8px 32px rgba(0, 0, 0, 0.3)';
-        
+
         // Position at touch point
         this.updateDragPreviewPosition(touch);
-        
+
         document.body.appendChild(this.dragPreview);
-        
+
         // Make original task semi-transparent
         taskCard.style.opacity = '0.3';
     }
@@ -1344,12 +1361,12 @@ class TodoApp {
         // Find which column the touch is over
         const elementBelow = document.elementFromPoint(touch.clientX, touch.clientY);
         const column = elementBelow?.closest('.column');
-        
+
         // Remove previous highlights
         document.querySelectorAll('.column').forEach(col => {
             col.classList.remove('drag-over');
         });
-        
+
         // Highlight current column if it's different from source
         if (column && column !== this.draggedTask.closest('.column')) {
             column.classList.add('drag-over');
@@ -1368,16 +1385,16 @@ class TodoApp {
 
     endDragMode(touchEvent) {
         if (!this.isDragging) return;
-        
+
         // Find drop target
         const elementBelow = document.elementFromPoint(this.touchEndX, this.touchEndY);
         const targetColumn = elementBelow?.closest('.column');
-        
+
         // Check if dropped on a valid target
         if (targetColumn && targetColumn !== this.draggedTask.closest('.column')) {
             const taskId = this.draggedTask.dataset.taskId;
             const newStatus = targetColumn.dataset.status;
-            
+
             // If dropping into pending column, ask for reason
             if (newStatus === 'pending') {
                 this.showPendingReasonModal(taskId);
@@ -1385,7 +1402,7 @@ class TodoApp {
                 this.updateTaskStatus(taskId, newStatus);
             }
         }
-        
+
         // Clean up drag mode
         this.cleanupDragMode();
     }
@@ -1396,22 +1413,22 @@ class TodoApp {
             this.dragPreview.remove();
             this.dragPreview = null;
         }
-        
+
         // Reset original task
         if (this.draggedTask) {
             this.draggedTask.classList.remove('mobile-dragging');
             this.draggedTask.style.opacity = '';
             this.draggedTask = null;
         }
-        
+
         // Remove drop zone highlights
         document.querySelectorAll('.column').forEach(column => {
             column.classList.remove('drag-over', 'drop-zone-active');
         });
-        
+
         // Re-enable scrolling
         document.body.style.overflow = '';
-        
+
         // Reset drag state
         this.isDragging = false;
     }
@@ -1419,9 +1436,9 @@ class TodoApp {
     showSwipeAnimation(taskCard, swipeRight) {
         const direction = swipeRight ? 'right' : 'left';
         taskCard.classList.add(`swipe-${direction}`);
-        
+
         this.showSwipeFeedback(taskCard, swipeRight);
-        
+
         setTimeout(() => {
             taskCard.classList.remove(`swipe-${direction}`);
         }, 300);
@@ -1430,7 +1447,7 @@ class TodoApp {
     showSwipeFeedback(taskCard, swipeRight) {
         const currentTask = this.tasks.find(t => t.id == taskCard.dataset.taskId);
         if (!currentTask) return;
-        
+
         const newStatus = this.getNextStatus(currentTask.status, swipeRight);
         const statusLabels = {
             'todo': 'To Do',
@@ -1438,14 +1455,14 @@ class TodoApp {
             'pending': 'Pending',
             'done': 'Done'
         };
-        
+
         if (newStatus !== currentTask.status) {
             const feedback = document.createElement('div');
             feedback.className = 'swipe-feedback';
             feedback.textContent = `Moved to ${statusLabels[newStatus]}`;
-            
+
             taskCard.appendChild(feedback);
-            
+
             setTimeout(() => {
                 if (feedback.parentNode) {
                     feedback.parentNode.removeChild(feedback);
@@ -1492,16 +1509,16 @@ class TodoApp {
     // Enhanced mobile touch feedback
     addTouchFeedback(element) {
         if (!element) return;
-        
+
         element.addEventListener('touchstart', (e) => {
             element.style.transform = 'scale(0.98)';
             element.style.transition = 'transform 0.1s ease';
         }, { passive: true });
-        
+
         element.addEventListener('touchend', (e) => {
             element.style.transform = '';
         }, { passive: true });
-        
+
         element.addEventListener('touchcancel', (e) => {
             element.style.transform = '';
         }, { passive: true });
@@ -1510,13 +1527,21 @@ class TodoApp {
     async updateTaskStatus(taskId, newStatus, pendingReason = null) {
         try {
             this.showTaskLoading(taskId);
-            await window.dataService.updateTaskStatus(taskId, newStatus, pendingReason);
+            await window.RobustDataService.updateTaskStatus(taskId, newStatus, pendingReason);
             await this.loadTasks(null, null, null, null, null, true); // Force refresh after status change
             this.hideTaskLoading(taskId);
             this.showTaskSuccess(taskId);
             this.hapticImpact('light');
         } catch (error) {
             console.error('Error updating task status:', error);
+            console.error('Error details:', {
+                taskId: taskId,
+                newStatus: newStatus,
+                errorMessage: error?.message || 'No message',
+                errorStack: error?.stack || 'No stack',
+                errorType: typeof error,
+                errorString: String(error)
+            });
             this.hideTaskLoading(taskId);
             this.showTaskError(taskId);
             this.hapticImpact('heavy');
@@ -1527,18 +1552,18 @@ class TodoApp {
         this.pendingTaskId = taskId;
         const modal = document.getElementById('pendingReasonModal');
         const input = document.getElementById('pendingReasonInput');
-        
+
         input.value = '';
         modal.style.display = 'block';
-        
+
         // Hide mobile FAB when pending reason modal is open
         const mobileFab = document.getElementById('mobileFab');
         if (mobileFab) {
             mobileFab.style.display = 'none';
         }
-        
+
         setTimeout(() => input.focus(), 100);
-        
+
         const handleEnter = (e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
@@ -1548,7 +1573,7 @@ class TodoApp {
                 this.closePendingReasonModal();
             }
         };
-        
+
         input.addEventListener('keydown', handleEnter);
         input._enterHandler = handleEnter;
     }
@@ -1556,15 +1581,15 @@ class TodoApp {
     closePendingReasonModal() {
         const modal = document.getElementById('pendingReasonModal');
         const input = document.getElementById('pendingReasonInput');
-        
+
         if (input._enterHandler) {
             input.removeEventListener('keydown', input._enterHandler);
             delete input._enterHandler;
         }
-        
+
         modal.style.display = 'none';
         this.pendingTaskId = null;
-        
+
         // Show mobile FAB again when pending reason modal is closed
         const mobileFab = document.getElementById('mobileFab');
         if (mobileFab && window.matchMedia && window.matchMedia('(max-width: 768px)').matches) {
@@ -1575,7 +1600,7 @@ class TodoApp {
     savePendingReason() {
         const input = document.getElementById('pendingReasonInput');
         const reason = input.value.trim();
-        
+
         // Allow blank reasons - no validation needed
         if (this.pendingTaskId) {
             this.updateTaskStatus(this.pendingTaskId, 'pending', reason || null);
@@ -1588,16 +1613,16 @@ class TodoApp {
         const modal = document.getElementById('taskModal');
         const title = document.getElementById('modalTitle');
         const form = document.getElementById('taskForm');
-        
+
         // Close mobile actions menu if open
         this.closeMobileActions();
-        
+
         // Hide mobile FAB when modal opens
         const mobileFab = document.getElementById('mobileFab');
         if (mobileFab) {
             mobileFab.style.display = 'none';
         }
-        
+
         if (taskId) {
             const task = this.tasks.find(t => t.id === taskId);
             title.textContent = 'Edit Task';
@@ -1623,7 +1648,7 @@ class TodoApp {
             }
             this.togglePendingReason('todo');
         }
-        
+
         this.renderTaskTags();
         modal.style.display = 'block';
         document.getElementById('taskTitle').focus();
@@ -1632,7 +1657,7 @@ class TodoApp {
     setupTagsInput() {
         const tagsInput = document.getElementById('taskTags');
         if (!tagsInput) return;
-        
+
         tagsInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
                 e.preventDefault();
@@ -1650,7 +1675,7 @@ class TodoApp {
     renderTaskTags() {
         const tagsDisplay = document.getElementById('tagsDisplay');
         if (!tagsDisplay) return;
-        
+
         tagsDisplay.innerHTML = this.currentTaskTags.map(tag => `
             <div class="tag-item">
                 ${this.escapeHtml(tag)}
@@ -1667,7 +1692,7 @@ class TodoApp {
     closeTaskModal() {
         document.getElementById('taskModal').style.display = 'none';
         this.currentTaskId = null;
-        
+
         // Show mobile FAB again when modal closes (only on mobile)
         const mobileFab = document.getElementById('mobileFab');
         if (mobileFab && window.matchMedia && window.matchMedia('(max-width: 768px)').matches) {
@@ -1698,9 +1723,9 @@ class TodoApp {
 
         try {
             if (this.currentTaskId) {
-                await window.dataService.updateTask(this.currentTaskId, taskData);
+                await window.RobustDataService.updateTask(this.currentTaskId, taskData);
             } else {
-                await window.dataService.createTask(taskData);
+                await window.RobustDataService.addTask(taskData);
             }
 
             await this.loadTags();
@@ -1734,21 +1759,21 @@ class TodoApp {
             mobileSearchInput.value = '';
         }
         this.currentSearch = '';
-        
+
         // Clear priority filter
         const mobilePriority = document.getElementById('mobilePriority');
         if (mobilePriority) {
             mobilePriority.value = '';
         }
         this.currentPriority = '';
-        
+
         // Clear tag filter
         const mobileTag = document.getElementById('mobileTag');
         if (mobileTag) {
             mobileTag.value = '';
         }
         this.currentIncludeTags = [];
-        
+
         this.updateFilterButtonIndicator();
         this.loadTasks();
         this.hapticImpact('light');
@@ -1765,27 +1790,25 @@ class TodoApp {
 
     async deleteTask(taskId) {
         console.log('Delete task called for ID:', taskId); // Debug log
-        
+
         // Show confirmation dialog
         const confirmed = await this.showDeleteConfirmation();
         if (!confirmed) {
             console.log('Delete cancelled by user');
             return;
         }
-        
+
         // Optimistic delete with undo snackbar
         try {
-            const task = await window.dataService.getTask(taskId);
-            console.log('Found task to delete:', task);
-            await window.dataService.deleteTask(taskId);
-            console.log('Task deleted successfully, reloading tasks...');
+            const task = await window.RobustDataService.getTaskById(taskId);
+            await window.RobustDataService.deleteTask(taskId);
             await this.loadTasks();
             this.hapticImpact('light');
             this.showUndoToast('Task deleted', async () => {
                 try {
-                    await window.dataService.createTask(task);
+                    await window.RobustDataService.addTask(task);
                     await this.loadTasks();
-                } catch (_) {}
+                } catch (_) { }
             });
         } catch (error) {
             console.error('Error deleting task:', error);
@@ -1800,7 +1823,7 @@ class TodoApp {
     toggleTaskExpansion(taskId) {
         const taskCard = document.querySelector(`[data-task-id="${taskId}"]`);
         const expandBtn = taskCard ? taskCard.querySelector('.task-expand-btn') : null;
-        
+
         if (this.expandedTasks.has(taskId)) {
             // Collapse the task
             this.expandedTasks.delete(taskId);
@@ -1816,21 +1839,21 @@ class TodoApp {
 
     showPriorityDropdown(event, taskId, currentPriority) {
         event.stopPropagation();
-        
+
         this.closePriorityDropdown();
-        
+
         const badge = event.target;
         const dropdown = document.createElement('div');
         dropdown.className = 'priority-dropdown';
         dropdown.id = 'priority-dropdown';
-        
+
         const priorities = [
             { value: 'urgent', label: 'Urgent', color: '#e53e3e' },
             { value: 'high', label: 'High', color: '#f39c12' },
             { value: 'medium', label: 'Medium', color: '#667eea' },
             { value: 'low', label: 'Low', color: '#38a169' }
         ];
-        
+
         dropdown.innerHTML = priorities.map(priority => `
             <div class="priority-option ${priority.value === currentPriority ? 'selected' : ''}" 
                  onclick="app.changePriority(${taskId}, '${priority.value}')"
@@ -1839,32 +1862,32 @@ class TodoApp {
                 ${priority.label}
             </div>
         `).join('');
-        
+
         const rect = badge.getBoundingClientRect();
         dropdown.style.position = 'absolute';
         dropdown.style.top = (rect.bottom + window.scrollY + 5) + 'px';
         dropdown.style.left = (rect.left + window.scrollX) + 'px';
         dropdown.style.zIndex = '1000';
-        
+
         document.body.appendChild(dropdown);
-        
+
         setTimeout(() => {
             document.addEventListener('click', this.closePriorityDropdown.bind(this), { once: true });
         }, 0);
     }
-    
+
     closePriorityDropdown() {
         const dropdown = document.getElementById('priority-dropdown');
         if (dropdown) {
             dropdown.remove();
         }
     }
-    
+
     async changePriority(taskId, newPriority) {
         this.closePriorityDropdown();
-        
+
         try {
-            await window.dataService.updateTaskPriority(taskId, newPriority);
+            await window.RobustDataService.updateTask(taskId, { priority: newPriority });
             await this.loadTasks();
         } catch (error) {
             console.error('Error updating task priority:', error);
@@ -1874,13 +1897,13 @@ class TodoApp {
     async openNotesModal(taskId) {
         this.currentTaskId = taskId;
         const modal = document.getElementById('notesModal');
-        
+
         // Hide mobile FAB when modal opens
         const mobileFab = document.getElementById('mobileFab');
         if (mobileFab) {
             mobileFab.style.display = 'none';
         }
-        
+
         modal.style.display = 'block';
         await this.loadNotes(taskId);
     }
@@ -1888,7 +1911,7 @@ class TodoApp {
     closeNotesModal() {
         document.getElementById('notesModal').style.display = 'none';
         this.currentTaskId = null;
-        
+
         // Show mobile FAB again when modal closes (only on mobile)
         const mobileFab = document.getElementById('mobileFab');
         if (mobileFab && window.matchMedia && window.matchMedia('(max-width: 768px)').matches) {
@@ -1898,7 +1921,7 @@ class TodoApp {
 
     async loadNotes(taskId) {
         try {
-            const notes = await window.dataService.getNotes(taskId);
+            const notes = await window.RobustDataService.getNotesByTaskId(taskId);
             this.renderNotes(notes);
         } catch (error) {
             console.error('Error loading notes:', error);
@@ -1936,11 +1959,11 @@ class TodoApp {
     async addNote() {
         const textarea = document.getElementById('newNote');
         const content = textarea.value.trim();
-        
+
         if (!content || !this.currentTaskId) return;
-        
+
         try {
-            await window.dataService.createNote(this.currentTaskId, content);
+            await window.RobustDataService.addNote({ task_id: this.currentTaskId, content: content });
             textarea.value = '';
             await this.loadNotes(this.currentTaskId);
         } catch (error) {
@@ -1950,8 +1973,7 @@ class TodoApp {
 
     async handleFileDrop(file, targetElement) {
         try {
-            console.log('File dropped:', { name: file.name, type: file.type, size: file.size });
-            
+
             if (!window.Capacitor || !window.Capacitor.Plugins || !window.Capacitor.Plugins.Filesystem) {
                 console.warn('Filesystem plugin not available');
                 return null;
@@ -2076,9 +2098,9 @@ class TodoApp {
                                 noteTextarea.selectionStart = noteTextarea.selectionEnd = caret;
                                 noteTextarea.dispatchEvent(new Event('input', { bubbles: true }));
                             }
-                        } catch (_) {}
+                        } catch (_) { }
                     }, 0);
-                } catch (_) {}
+                } catch (_) { }
             });
             noteTextarea.addEventListener('dragover', (e) => {
                 e.preventDefault();
@@ -2097,7 +2119,7 @@ class TodoApp {
                 e.preventDefault();
                 noteTextarea.style.borderColor = '';
                 noteTextarea.style.backgroundColor = '';
-                
+
                 // Prefer original Finder URI if provided (no copying)
                 const uriList = e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain');
                 if (uriList) {
@@ -2117,7 +2139,7 @@ class TodoApp {
                 if (files.length > 0) {
                     const file = files[0];
                     const fileInfo = await this.handleFileDrop(file, noteTextarea);
-                    
+
                     if (fileInfo) {
                         // handleFileDrop already inserts the link; avoid duplicating
                         console.log('Attachment saved:', fileInfo);
@@ -2154,7 +2176,7 @@ class TodoApp {
                 e.preventDefault();
                 subtaskInput.style.borderColor = '';
                 subtaskInput.style.backgroundColor = '';
-                
+
                 // Prefer original Finder URI if provided (no copying)
                 const uriList = e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain');
                 if (uriList) {
@@ -2174,7 +2196,7 @@ class TodoApp {
                 if (files.length > 0) {
                     const file = files[0];
                     const fileInfo = await this.handleFileDrop(file, subtaskInput);
-                    
+
                     if (fileInfo) {
                         // handleFileDrop already inserts the link; avoid duplicating
                         console.log('Attachment saved:', fileInfo);
@@ -2265,9 +2287,9 @@ class TodoApp {
                             target.selectionStart = target.selectionEnd = caret;
                             target.dispatchEvent(new Event('input', { bubbles: true }));
                         }
-                    } catch (_) {}
+                    } catch (_) { }
                 }, 0);
-            } catch (_) {}
+            } catch (_) { }
         });
 
         // Delegated input handler for decoding when paste events are unavailable
@@ -2317,49 +2339,49 @@ class TodoApp {
                 target.selectionStart = target.selectionEnd = newCaret;
                 target.dispatchEvent(new Event('input', { bubbles: true }));
             }
-        } catch (_) {}
+        } catch (_) { }
     }
 
     async editNote(noteId) {
         const noteContent = document.getElementById(`note-content-${noteId}`);
         const currentText = noteContent.textContent;
-        
+
         const textarea = document.createElement('textarea');
         textarea.value = currentText;
         textarea.className = 'edit-note-textarea';
         textarea.rows = 3;
-        
+
         const saveBtn = document.createElement('button');
         saveBtn.textContent = 'Save';
         saveBtn.className = 'save-note-btn';
-        
+
         const cancelBtn = document.createElement('button');
         cancelBtn.textContent = 'Cancel';
         cancelBtn.className = 'cancel-note-btn';
-        
+
         const actions = document.createElement('div');
         actions.className = 'edit-note-actions';
         actions.appendChild(saveBtn);
         actions.appendChild(cancelBtn);
-        
+
         noteContent.innerHTML = '';
         noteContent.appendChild(textarea);
         noteContent.appendChild(actions);
-        
+
         textarea.focus();
-        
+
         saveBtn.onclick = async () => {
             const newContent = textarea.value.trim();
             if (newContent) {
                 try {
-                    await window.dataService.updateNote(noteId, newContent);
+                    await window.RobustDataService.updateNote(noteId, { content: newContent });
                     await this.loadNotes(this.currentTaskId);
                 } catch (error) {
                     console.error('Error updating note:', error);
                 }
             }
         };
-        
+
         cancelBtn.onclick = () => {
             noteContent.textContent = currentText;
         };
@@ -2367,33 +2389,43 @@ class TodoApp {
 
     async deleteNote(noteId) {
         if (!confirm('Are you sure you want to delete this note?')) return;
-        
+
         try {
-            await window.dataService.deleteNote(noteId);
+            await window.RobustDataService.deleteNote(noteId);
             await this.loadNotes(this.currentTaskId);
         } catch (error) {
             console.error('Error deleting note:', error);
         }
     }
 
-    toggleSubtasksVisibility(taskId) {
-        const subtasksList = document.getElementById(`subtasks-${taskId}`);
-        const toggleBtn = subtasksList.parentElement.querySelector('.toggle-subtasks-btn svg');
-        
-        if (subtasksList.style.display === 'none') {
-            subtasksList.style.display = 'block';
-            toggleBtn.style.transform = 'rotate(0deg)';
-        } else {
-            subtasksList.style.display = 'none';
-            toggleBtn.style.transform = 'rotate(-90deg)';
-        }
-    }
 
 
-    async toggleSubtask(subtaskId) {
+    async toggleSubtask(subtaskId, checked) {
         try {
-            await window.dataService.toggleSubtask(subtaskId);
-            await this.loadTasks(null, null, null, null, null, true); // Force refresh to show updated state
+            const intended = !!checked;
+            // Suppress one auto refresh caused by save notification
+            window.__suppressNextAutoRefresh = true;
+            const result = await window.RobustDataService.updateSubtask(subtaskId, { completed: intended });
+            await this.loadTasks(null, null, null, null, null, true); // Force refresh UI
+            // Ensure checkbox reflects intended state immediately
+            try {
+                const cb = document.getElementById(`subtask-checkbox-${subtaskId}`);
+                if (cb) cb.checked = intended;
+                const container = document.getElementById(`subtask-item-${subtaskId}`);
+                if (container) {
+                    if (intended) container.classList.add('completed');
+                    else container.classList.remove('completed');
+                }
+            } catch (_) { }
+            // Verify persisted state once after reload
+            try {
+                const sub = await window.RobustDataService.getSubtaskById(subtaskId);
+                if (sub && sub.completed !== intended) {
+                    console.warn('Subtask state mismatch after reload; re-applying once', { intended, actual: sub.completed });
+                    await window.RobustDataService.updateSubtask(subtaskId, { completed: intended });
+                    await this.loadTasks(null, null, null, null, null, true);
+                }
+            } catch (_) { }
         } catch (error) {
             console.error('Error toggling subtask:', error);
         }
@@ -2402,36 +2434,40 @@ class TodoApp {
     async editSubtask(subtaskId, currentTitle) {
         const newTitle = prompt('Edit subtask:', currentTitle);
         if (newTitle && newTitle.trim() !== currentTitle) {
-        try {
-            await window.dataService.updateSubtask(subtaskId, { title: newTitle.trim() });
-            await this.loadTasks(null, null, null, null, null, true); // Force refresh after edit
-        } catch (error) {
-            console.error('Error updating subtask:', error);
-        }
+            try {
+                await window.RobustDataService.updateSubtask(subtaskId, { title: newTitle.trim() });
+                await this.loadTasks(null, null, null, null, null, true); // Force refresh after edit
+            } catch (error) {
+                console.error('Error updating subtask:', error);
+            }
         }
     }
 
     async deleteSubtask(subtaskId) {
         if (!confirm('Are you sure you want to delete this subtask?')) return;
-        
+
         try {
-            await window.dataService.deleteSubtask(subtaskId);
+            const success = await window.RobustDataService.deleteSubtask(subtaskId);
+            if (!success) {
+                console.warn('Delete subtask reported false; attempting hard refresh');
+            }
             await this.loadTasks(null, null, null, null, null, true); // Force refresh after delete
         } catch (error) {
             console.error('Error deleting subtask:', error);
+            await this.loadTasks(null, null, null, null, null, true); // Ensure UI reflects current state
         }
     }
 
     async openNotesModal(taskId) {
         this.currentTaskId = taskId;
         const modal = document.getElementById('notesModal');
-        
+
         // Hide mobile FAB when modal opens
         const mobileFab = document.getElementById('mobileFab');
         if (mobileFab) {
             mobileFab.style.display = 'none';
         }
-        
+
         modal.style.display = 'block';
         await this.loadNotes(taskId);
     }
@@ -2439,7 +2475,7 @@ class TodoApp {
     closeNotesModal() {
         document.getElementById('notesModal').style.display = 'none';
         this.currentTaskId = null;
-        
+
         // Show mobile FAB again when modal closes (only on mobile)
         const mobileFab = document.getElementById('mobileFab');
         if (mobileFab && window.matchMedia && window.matchMedia('(max-width: 768px)').matches) {
@@ -2449,7 +2485,7 @@ class TodoApp {
 
     async loadNotes(taskId) {
         try {
-            const notes = await window.dataService.getNotes(taskId);
+            const notes = await window.RobustDataService.getNotesByTaskId(taskId);
             this.renderNotes(notes);
         } catch (error) {
             console.error('Error loading notes:', error);
@@ -2487,7 +2523,7 @@ class TodoApp {
         if (!content || !this.currentTaskId) return;
 
         try {
-            await window.dataService.createNote(this.currentTaskId, content);
+            await window.RobustDataService.addNote({ task_id: this.currentTaskId, content: content });
             document.getElementById('newNote').value = '';
             await this.loadNotes(this.currentTaskId);
         } catch (error) {
@@ -2500,7 +2536,7 @@ class TodoApp {
         if (newContent === null || newContent.trim() === currentContent) return;
 
         try {
-            await window.dataService.updateNote(noteId, newContent.trim());
+            await window.RobustDataService.updateNote(noteId, { content: newContent.trim() });
             await this.loadNotes(this.currentTaskId);
         } catch (error) {
             console.error('Error updating note:', error);
@@ -2511,7 +2547,7 @@ class TodoApp {
         if (!confirm('Delete this note?')) return;
 
         try {
-            await window.dataService.deleteNote(noteId);
+            await window.RobustDataService.deleteNote(noteId);
             await this.loadNotes(this.currentTaskId);
         } catch (error) {
             console.error('Error deleting note:', error);
@@ -2519,16 +2555,38 @@ class TodoApp {
     }
 
     // Subtask methods
-    toggleSubtasksVisibility(taskId) {
+    toggleSubtasksVisibility(taskId, event) {
+        if (event) {
+            event.stopPropagation(); // Prevent task expansion/collapse
+        }
+
         const subtasksList = document.getElementById(`subtasks-${taskId}`);
-        const toggleBtn = subtasksList.parentElement.querySelector('.toggle-subtasks-btn svg');
-        
-        if (subtasksList.style.display === 'none' || subtasksList.style.display === '') {
+        const toggleIndicator = document.getElementById(`toggle-indicator-${taskId}`);
+
+        if (!subtasksList) {
+            console.warn('Subtasks list not found for task:', taskId);
+            return;
+        }
+
+        // Get computed style to handle cases where display might be set by CSS
+        const computedStyle = window.getComputedStyle(subtasksList);
+        const currentDisplay = computedStyle.display;
+        const isCurrentlyHidden = currentDisplay === 'none' || subtasksList.style.display === 'none';
+
+        // Toggling subtasks visibility
+
+        if (isCurrentlyHidden) {
             subtasksList.style.display = 'block';
-            toggleBtn.style.transform = 'rotate(180deg)';
+            subtasksList.style.visibility = 'visible';
+            subtasksList.style.opacity = '1';
+            subtasksList.classList.add('expanded');
+            if (toggleIndicator) toggleIndicator.textContent = '▲';
         } else {
             subtasksList.style.display = 'none';
-            toggleBtn.style.transform = 'rotate(0deg)';
+            subtasksList.style.visibility = 'hidden';
+            subtasksList.style.opacity = '0';
+            subtasksList.classList.remove('expanded');
+            if (toggleIndicator) toggleIndicator.textContent = '▼';
         }
     }
 
@@ -2537,7 +2595,7 @@ class TodoApp {
         if (!title || !title.trim()) return;
 
         try {
-            await window.dataService.createSubtask(taskId, title.trim());
+            await window.RobustDataService.addSubtask({ task_id: taskId, title: title.trim() });
             await this.loadTasks(null, null, null, null, null, true); // Force refresh after adding
         } catch (error) {
             console.error('Error adding subtask:', error);
@@ -2547,11 +2605,11 @@ class TodoApp {
     async addSubtaskFromInput(taskId) {
         const input = document.getElementById(`new-subtask-${taskId}`);
         const title = input.value.trim();
-        
+
         if (!title) return;
 
         try {
-            await window.dataService.createSubtask(taskId, title);
+            await window.RobustDataService.addSubtask({ task_id: taskId, title: title });
             input.value = '';
             // Clear focus from input to allow refresh
             input.blur();
@@ -2561,21 +2619,14 @@ class TodoApp {
         }
     }
 
-    async toggleSubtask(subtaskId) {
-        try {
-            await window.dataService.toggleSubtask(subtaskId);
-            await this.loadTasks();
-        } catch (error) {
-            console.error('Error toggling subtask:', error);
-        }
-    }
+    // duplicate legacy method removed; use toggleSubtask(subtaskId, checked) above
 
     async editSubtask(subtaskId, currentTitle) {
         const newTitle = prompt('Edit subtask:', currentTitle);
         if (newTitle === null || newTitle.trim() === currentTitle) return;
 
         try {
-            await window.dataService.updateSubtask(subtaskId, { title: newTitle.trim() });
+            await window.RobustDataService.updateSubtask(subtaskId, { title: newTitle.trim() });
             await this.loadTasks(null, null, null, null, null, true); // Force refresh after edit
         } catch (error) {
             console.error('Error updating subtask:', error);
@@ -2586,7 +2637,7 @@ class TodoApp {
         if (!confirm('Delete this subtask?')) return;
 
         try {
-            await window.dataService.deleteSubtask(subtaskId);
+            await window.RobustDataService.deleteSubtask(subtaskId);
             await this.loadTasks(null, null, null, null, null, true); // Force refresh after delete
         } catch (error) {
             console.error('Error deleting subtask:', error);
@@ -2596,15 +2647,15 @@ class TodoApp {
     // Import/Export methods
     async exportData() {
         try {
-            const exportData = await window.dataService.exportData();
-            
+            const exportData = await window.RobustDataService.exportData();
+
             // For Capacitor, we'll use the Filesystem API to save the file
             if (window.Capacitor && window.Capacitor.Plugins.Filesystem) {
                 const { Filesystem, Share, App } = window.Capacitor.Plugins;
-                
+
                 const fileName = `kanban-export-${new Date().toISOString().split('T')[0]}.json`;
                 const data = JSON.stringify(exportData, null, 2);
-                
+
                 const isMac = /Macintosh/.test(navigator.userAgent);
 
                 try {
@@ -2633,7 +2684,7 @@ class TodoApp {
                                     await App.openUrl({ url: uriResult.uri });
                                 } catch (e) {
                                     console.warn('[Export] App.openUrl failed, showing alert instead:', e);
-                                    try { alert(`Exported file:\n${uriResult.uri}`); } catch (_) {}
+                                    try { alert(`Exported file:\n${uriResult.uri}`); } catch (_) { }
                                 }
                             } else if (Share && Share.share) {
                                 // iPhone/iPad: Share sheet
@@ -2645,7 +2696,7 @@ class TodoApp {
                             }
                         } else {
                             console.log('[Export] Saved to Documents with file name:', fileName);
-                            try { alert(`Exported file in Documents:\n${fileName}`); } catch (_) {}
+                            try { alert(`Exported file in Documents:\n${fileName}`); } catch (_) { }
                         }
                     } catch (resolveErr) {
                         console.error('[Export] getUri/openUrl failed, fallback to download:', resolveErr);
@@ -2654,7 +2705,7 @@ class TodoApp {
                     this.showNotification(`Exported. You can also find it in Documents/${fileName}`, 'success');
                 } catch (error) {
                     console.error('[Export] Error during write/share:', error);
-                    try { this.showNotification('Export failed: ' + (error?.message || JSON.stringify(error) || 'Unknown'), 'error'); } catch (_) {}
+                    try { this.showNotification('Export failed: ' + (error?.message || JSON.stringify(error) || 'Unknown'), 'error'); } catch (_) { }
                     // Fallback to download
                     this.downloadFile(exportData, fileName);
                 }
@@ -2670,8 +2721,8 @@ class TodoApp {
     }
 
     downloadFile(data, fileName) {
-        const blob = new Blob([JSON.stringify(data, null, 2)], { 
-            type: 'application/json' 
+        const blob = new Blob([JSON.stringify(data, null, 2)], {
+            type: 'application/json'
         });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -2681,7 +2732,7 @@ class TodoApp {
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
-        
+
         this.showNotification('Data exported successfully!', 'success');
     }
 
@@ -2700,38 +2751,38 @@ class TodoApp {
     setupFileUpload() {
         const fileUploadArea = document.getElementById('fileUploadArea');
         const fileInput = document.getElementById('importFile');
-        
+
         // Remove existing listeners to avoid duplicates
         const newFileUploadArea = fileUploadArea.cloneNode(true);
         fileUploadArea.parentNode.replaceChild(newFileUploadArea, fileUploadArea);
-        
+
         // Click to select file
         newFileUploadArea.addEventListener('click', () => {
             fileInput.click();
         });
-        
+
         // File selection
         fileInput.addEventListener('change', (e) => {
             if (e.target.files.length > 0) {
                 this.handleFileSelection(e.target.files[0]);
             }
         });
-        
+
         // Drag and drop
         newFileUploadArea.addEventListener('dragover', (e) => {
             e.preventDefault();
             newFileUploadArea.classList.add('drag-over');
         });
-        
+
         newFileUploadArea.addEventListener('dragleave', (e) => {
             e.preventDefault();
             newFileUploadArea.classList.remove('drag-over');
         });
-        
+
         newFileUploadArea.addEventListener('drop', (e) => {
             e.preventDefault();
             newFileUploadArea.classList.remove('drag-over');
-            
+
             const files = e.dataTransfer.files;
             if (files.length > 0) {
                 this.handleFileSelection(files[0]);
@@ -2744,31 +2795,31 @@ class TodoApp {
             this.showNotification('Please select a JSON file', 'error');
             return;
         }
-        
+
         try {
             const text = await file.text();
             const data = JSON.parse(text);
-            
+
             // Validate file format - support both PostgreSQL and iOS formats
             const hasPostgresFormat = data.database && data.database.tasks;
             const hasIOSFormat = data.data && data.data.tasks;
-            
+
             if (!hasPostgresFormat && !hasIOSFormat) {
                 throw new Error('Invalid file format. Expected PostgreSQL or iOS export format.');
             }
-            
+
             // Show selected file
             this.showSelectedFile(file.name);
-            
+
             // Show preview
             this.showImportPreview(data);
-            
+
             // Store data for import
             this.importData = data;
-            
+
             // Enable import button
             document.getElementById('importBtn').disabled = false;
-            
+
         } catch (error) {
             console.error('File parsing error:', error);
             this.showNotification('Invalid JSON file or format', 'error');
@@ -2778,10 +2829,10 @@ class TodoApp {
     showSelectedFile(fileName) {
         const selectedFile = document.getElementById('selectedFile');
         const fileNameSpan = selectedFile.querySelector('.file-name');
-        
+
         fileNameSpan.textContent = fileName;
         selectedFile.style.display = 'block';
-        
+
         document.getElementById('fileUploadArea').style.display = 'none';
     }
 
@@ -2796,10 +2847,10 @@ class TodoApp {
 
     showImportPreview(data) {
         const preview = document.getElementById('importPreview');
-        
+
         // Support both formats
         let tasksCount, notesCount, subtasksCount;
-        
+
         if (data.database) {
             // PostgreSQL format
             tasksCount = data.database.tasks ? data.database.tasks.length : 0;
@@ -2813,11 +2864,11 @@ class TodoApp {
         } else {
             tasksCount = notesCount = subtasksCount = 0;
         }
-        
+
         document.getElementById('previewTasks').textContent = tasksCount;
         document.getElementById('previewNotes').textContent = notesCount;
         document.getElementById('previewSubtasks').textContent = subtasksCount;
-        
+
         preview.style.display = 'block';
     }
 
@@ -2826,27 +2877,27 @@ class TodoApp {
             this.showNotification('No file selected', 'error');
             return;
         }
-        
+
         const clearExisting = document.getElementById('clearExisting').checked;
         const importBtn = document.getElementById('importBtn');
-        
+
         try {
             importBtn.disabled = true;
             importBtn.textContent = 'Importing...';
-            
-            const result = await window.dataService.importData(this.importData, { clearExisting });
-            
+
+            const result = await window.RobustDataService.importData(this.importData, { clearExisting });
+
             // Show success message with stats
             this.showImportResult(result);
-            
+
             // Reload tasks
             await this.loadTasks();
-            
+
             // Close modal after a delay
             setTimeout(() => {
                 this.closeImportModal();
             }, 3000);
-            
+
         } catch (error) {
             console.error('Import error:', error);
             this.showNotification('Failed to import data: ' + error.message, 'error');
@@ -2859,14 +2910,14 @@ class TodoApp {
     showImportResult(result) {
         const container = document.querySelector('.import-container');
         const existingMessage = container.querySelector('.import-message');
-        
+
         if (existingMessage) {
             existingMessage.remove();
         }
-        
+
         const messageDiv = document.createElement('div');
         messageDiv.className = `import-message ${result.success ? 'success' : 'error'}`;
-        
+
         if (result.success) {
             messageDiv.innerHTML = `
                 <div>${result.message}</div>
@@ -2891,7 +2942,7 @@ class TodoApp {
         } else {
             messageDiv.textContent = result.message || 'Import failed';
         }
-        
+
         container.insertBefore(messageDiv, container.firstChild);
     }
 
@@ -2902,12 +2953,12 @@ class TodoApp {
         document.getElementById('fileUploadArea').style.display = 'block';
         document.getElementById('importPreview').style.display = 'none';
         document.getElementById('importBtn').disabled = true;
-        
+
         const existingMessage = document.querySelector('.import-message');
         if (existingMessage) {
             existingMessage.remove();
         }
-        
+
         this.importData = null;
     }
 
@@ -2916,7 +2967,7 @@ class TodoApp {
         const notification = document.createElement('div');
         notification.className = `notification notification-${type}`;
         notification.textContent = message;
-        
+
         // Style the notification
         Object.assign(notification.style, {
             position: 'fixed',
@@ -2932,7 +2983,7 @@ class TodoApp {
             transform: 'translateX(100%)',
             transition: 'transform 0.3s ease'
         });
-        
+
         // Set background color based on type
         const colors = {
             success: '#10b981',
@@ -2941,15 +2992,15 @@ class TodoApp {
             warning: '#f59e0b'
         };
         notification.style.backgroundColor = colors[type] || colors.info;
-        
+
         // Add to page
         document.body.appendChild(notification);
-        
+
         // Animate in
         setTimeout(() => {
             notification.style.transform = 'translateX(0)';
         }, 100);
-        
+
         // Remove after delay
         setTimeout(() => {
             notification.style.transform = 'translateX(100%)';
@@ -2976,7 +3027,7 @@ class TodoApp {
             overlay.style.alignItems = 'center';
             overlay.style.justifyContent = 'center';
             overlay.style.padding = '20px';
-            
+
             // Create modal content
             const modal = document.createElement('div');
             modal.style.background = '#fff';
@@ -2985,13 +3036,13 @@ class TodoApp {
             modal.style.maxWidth = '400px';
             modal.style.width = '100%';
             modal.style.boxShadow = '0 20px 40px rgba(0, 0, 0, 0.3)';
-            
+
             // Dark mode support
             if (document.body.getAttribute('data-theme') === 'dark') {
                 modal.style.background = '#1f2937';
                 modal.style.color = '#f9fafb';
             }
-            
+
             // Create content
             modal.innerHTML = `
                 <div style="text-align: center; margin-bottom: 24px;">
@@ -3022,7 +3073,7 @@ class TodoApp {
                     ">Delete</button>
                 </div>
             `;
-            
+
             // Dark mode button styles
             if (document.body.getAttribute('data-theme') === 'dark') {
                 const cancelBtn = modal.querySelector('#cancelDelete');
@@ -3031,30 +3082,30 @@ class TodoApp {
                 cancelBtn.style.color = '#f9fafb';
                 confirmBtn.style.background = '#dc2626';
             }
-            
+
             overlay.appendChild(modal);
             document.body.appendChild(overlay);
-            
+
             // Add event listeners
             const cancelBtn = modal.querySelector('#cancelDelete');
             const confirmBtn = modal.querySelector('#confirmDelete');
-            
+
             const cleanup = () => {
                 if (overlay.parentNode) {
                     overlay.parentNode.removeChild(overlay);
                 }
             };
-            
+
             cancelBtn.addEventListener('click', () => {
                 cleanup();
                 resolve(false);
             });
-            
+
             confirmBtn.addEventListener('click', () => {
                 cleanup();
                 resolve(true);
             });
-            
+
             // Close on overlay click
             overlay.addEventListener('click', (e) => {
                 if (e.target === overlay) {
@@ -3062,7 +3113,7 @@ class TodoApp {
                     resolve(false);
                 }
             });
-            
+
             // Close on Escape key
             const handleEscape = (e) => {
                 if (e.key === 'Escape') {
@@ -3072,7 +3123,7 @@ class TodoApp {
                 }
             };
             document.addEventListener('keydown', handleEscape);
-            
+
             // Add hover effects
             cancelBtn.addEventListener('mouseenter', () => {
                 cancelBtn.style.background = document.body.getAttribute('data-theme') === 'dark' ? '#4b5563' : '#e5e7eb';
@@ -3080,7 +3131,7 @@ class TodoApp {
             cancelBtn.addEventListener('mouseleave', () => {
                 cancelBtn.style.background = document.body.getAttribute('data-theme') === 'dark' ? '#374151' : '#f3f4f6';
             });
-            
+
             confirmBtn.addEventListener('mouseenter', () => {
                 confirmBtn.style.background = '#b91c1c';
             });
@@ -3119,7 +3170,7 @@ class TodoApp {
         btn.style.fontWeight = '600';
         btn.style.cursor = 'pointer';
         btn.addEventListener('click', async () => {
-            try { await onUndo?.(); } catch(_) {}
+            try { await onUndo?.(); } catch (_) { }
             if (toast.parentNode) toast.parentNode.removeChild(toast);
             this.hapticImpact('medium');
         });
@@ -3135,7 +3186,7 @@ class TodoApp {
     async manualSync() {
         try {
             this.showNotification('Syncing with iCloud...', 'info');
-            await window.dataService.manualSync();
+            await window.RobustDataService.manualSync();
             this.showNotification('Sync completed successfully!', 'success');
         } catch (error) {
             console.error('Error during manual sync:', error);
@@ -3175,9 +3226,9 @@ class TodoApp {
         for (const t of this.tasks) {
             if (!tasksByStatus[t.status]) tasksByStatus[t.status] = [];
             try {
-                const subtasks = await window.dataService.getSubtasks(t.id);
+                const subtasks = await window.RobustDataService.getSubtasks(t.id);
                 t.__subtasks = subtasks || [];
-            } catch(_) { t.__subtasks = []; }
+            } catch (_) { t.__subtasks = []; }
             tasksByStatus[t.status].push(t);
         }
         const html = this.buildPrintableHTML(include, tasksByStatus, compact);
@@ -3242,7 +3293,7 @@ class TodoApp {
                 const tagsHTML = (task.tags || []).map(t => `<span class=\"pr-tag\">${this.escapeHtml(t)}</span>`).join('');
                 let subtasksHTML = '';
                 try {
-                    const subtasks = await window.dataService.getSubtasks(task.id);
+                    const subtasks = await window.RobustDataService.getSubtasks(task.id);
                     if (Array.isArray(subtasks) && subtasks.length) {
                         subtasksHTML = `
                             <div class=\"pr-subtasks\">
@@ -3252,7 +3303,7 @@ class TodoApp {
                                 </ul>
                             </div>`;
                     }
-                } catch(_) {}
+                } catch (_) { }
 
                 taskDiv.innerHTML = `
                     <div class=\"pr-title\">${this.escapeHtml(task.title)}</div>
@@ -3340,9 +3391,9 @@ class TodoApp {
                 if (!tasksByStatus[t.status]) tasksByStatus[t.status] = [];
                 // fetch subtasks
                 try {
-                    const subtasks = await window.dataService.getSubtasks(t.id);
+                    const subtasks = await window.RobustDataService.getSubtasks(t.id);
                     t.__subtasks = subtasks || [];
-                } catch(_) { t.__subtasks = []; }
+                } catch (_) { t.__subtasks = []; }
                 tasksByStatus[t.status].push(t);
             }
 
@@ -3357,7 +3408,7 @@ class TodoApp {
             }
             if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Filesystem) {
                 const { Filesystem, App, Share } = window.Capacitor.Plugins;
-                const fileName = `kanban-print-${new Date().toISOString().replace(/[:T]/g,'-').split('.')[0]}.html`;
+                const fileName = `kanban-print-${new Date().toISOString().replace(/[:T]/g, '-').split('.')[0]}.html`;
                 await Filesystem.writeFile({ path: fileName, data: html, directory: 'DOCUMENTS', encoding: 'utf8' });
                 try {
                     const { uri } = await Filesystem.getUri({ path: fileName, directory: 'DOCUMENTS' });
@@ -3391,7 +3442,7 @@ class TodoApp {
             const tasksByStatus = { todo: [], in_progress: [], pending: [], done: [] };
             for (const t of this.tasks) {
                 if (!tasksByStatus[t.status]) tasksByStatus[t.status] = [];
-                try { t.__subtasks = await window.dataService.getSubtasks(t.id); } catch(_) { t.__subtasks = []; }
+                try { t.__subtasks = await window.RobustDataService.getSubtasks(t.id); } catch (_) { t.__subtasks = []; }
                 tasksByStatus[t.status].push(t);
             }
             const html = this.buildPrintableHTML(includeStatuses, tasksByStatus, compact);
@@ -3423,14 +3474,14 @@ class TodoApp {
                         await App.openUrl({ url: uri });
                         opened = true;
                     }
-                } catch (_) {}
+                } catch (_) { }
                 if (!opened) {
                     try {
                         if (Share && Share.share) {
                             await Share.share({ title: 'Kanban Tasks', url: uri, dialogTitle: 'Share/Print' });
                             opened = true;
                         }
-                    } catch (_) {}
+                    } catch (_) { }
                 }
                 if (!opened) {
                     try {
@@ -3438,7 +3489,7 @@ class TodoApp {
                         const url = URL.createObjectURL(blob);
                         window.open(url, '_blank');
                         opened = true;
-                    } catch (_) {}
+                    } catch (_) { }
                 }
                 if (opened) return;
             }
@@ -3542,9 +3593,9 @@ class TodoApp {
                         await Filesystem.writeFile({ path: fileName, data: base64, directory: 'DOCUMENTS', recursive: true });
                         const { uri } = await Filesystem.getUri({ path: fileName, directory: 'DOCUMENTS' });
                         let opened = false;
-                        try { if (App && App.openUrl) { await App.openUrl({ url: uri }); opened = true; } } catch (_) {}
+                        try { if (App && App.openUrl) { await App.openUrl({ url: uri }); opened = true; } } catch (_) { }
                         if (!opened) {
-                            try { if (Share && Share.share) { await Share.share({ title: 'Kanban Tasks PDF', url: uri, dialogTitle: 'Share/Print PDF' }); opened = true; } } catch (_) {}
+                            try { if (Share && Share.share) { await Share.share({ title: 'Kanban Tasks PDF', url: uri, dialogTitle: 'Share/Print PDF' }); opened = true; } } catch (_) { }
                         }
                         if (!opened) {
                             // Fallback to in-memory open
@@ -3580,7 +3631,7 @@ class TodoApp {
                 const blob = new Blob([html], { type: 'text/html' });
                 const url = URL.createObjectURL(blob);
                 window.location.href = url;
-            } catch(_) {}
+            } catch (_) { }
         }
     }
 
@@ -3591,10 +3642,10 @@ class TodoApp {
 
     toggleFloatingTagFilter() {
         if (!this.isDesktop()) return;
-        
+
         const floatingFilter = document.getElementById('floatingTagFilter');
         const isVisible = floatingFilter.style.display !== 'none';
-        
+
         if (isVisible) {
             this.closeFloatingTagFilter();
         } else {
@@ -3604,7 +3655,7 @@ class TodoApp {
 
     openFloatingTagFilter() {
         if (!this.isDesktop()) return;
-        
+
         const floatingFilter = document.getElementById('floatingTagFilter');
         floatingFilter.style.display = 'block';
         // Ensure the close button works reliably on touch devices (iPad)
@@ -3619,10 +3670,10 @@ class TodoApp {
             closeBtn.addEventListener('touchend', handler, { passive: false });
             closeBtn.dataset.boundClose = '1';
         }
-        
+
         // Restore saved position
         this.restoreFloatingFilterPosition();
-        
+
         this.updateFloatingTagFilter();
         this.makeDraggable();
     }
@@ -3631,7 +3682,7 @@ class TodoApp {
         const floatingFilter = document.getElementById('floatingTagFilter');
         floatingFilter.style.display = 'none';
         floatingFilter.classList.remove('minimized');
-        
+
         // Save current position before closing
         this.saveFloatingFilterPosition();
     }
@@ -3643,23 +3694,23 @@ class TodoApp {
 
     updateFloatingTagFilter() {
         if (!this.isDesktop()) return;
-        
+
         // Update priority grid
         this.updateFloatingPriorityGrid();
-        
+
         // Update tag grid
         const tagGrid = document.getElementById('floatingTagGrid');
         if (!tagGrid) return;
-        
+
         // Clear existing tags
         tagGrid.innerHTML = '';
-        
+
         // Create clickable tag buttons
         this.availableTags.forEach(tag => {
             const tagElement = document.createElement('div');
             tagElement.className = 'floating-tag-item';
             tagElement.textContent = tag;
-            
+
             // Determine current state and styling
             if (this.currentIncludeTags.includes(tag)) {
                 tagElement.classList.add('include');
@@ -3671,23 +3722,23 @@ class TodoApp {
                 tagElement.classList.add('neutral');
                 tagElement.title = `Click to include this tag`;
             }
-            
+
             // Add click handler
             tagElement.addEventListener('click', () => {
                 this.toggleFloatingTag(tag);
             });
-            
+
             tagGrid.appendChild(tagElement);
         });
     }
-    
+
     updateFloatingPriorityGrid() {
         const priorityGrid = document.getElementById('floatingPriorityGrid');
         if (!priorityGrid) return;
-        
+
         // Clear existing priorities
         priorityGrid.innerHTML = '';
-        
+
         const priorities = [
             { value: '', label: 'All' },
             { value: 'urgent', label: 'Urgent' },
@@ -3695,18 +3746,18 @@ class TodoApp {
             { value: 'medium', label: 'Medium' },
             { value: 'low', label: 'Low' }
         ];
-        
+
         // Create clickable priority buttons
         priorities.forEach(priority => {
             const priorityElement = document.createElement('div');
             priorityElement.className = 'floating-priority-item';
             priorityElement.textContent = priority.label;
-            
+
             // Add priority-specific class for styling
             if (priority.value) {
                 priorityElement.classList.add(priority.value);
             }
-            
+
             // Check if this priority is currently selected
             if (this.currentPriority === priority.value) {
                 priorityElement.classList.add('active');
@@ -3714,20 +3765,20 @@ class TodoApp {
             } else {
                 priorityElement.title = `Click to filter by ${priority.label.toLowerCase()} priority`;
             }
-            
+
             // Add click handler
             priorityElement.addEventListener('click', () => {
                 this.toggleFloatingPriority(priority.value);
             });
-            
+
             priorityGrid.appendChild(priorityElement);
         });
     }
-    
+
     toggleFloatingTag(tag) {
         const isIncluded = this.currentIncludeTags.includes(tag);
         const isExcluded = this.currentExcludeTags.includes(tag);
-        
+
         if (isIncluded) {
             // Remove from include, add to exclude
             const index = this.currentIncludeTags.indexOf(tag);
@@ -3745,7 +3796,7 @@ class TodoApp {
             }
             this.currentIncludeTags.push(tag);
         }
-        
+
         // Update UI and refresh tasks
         this.updateFloatingTagFilter();
         this.syncUIState();
@@ -3759,7 +3810,7 @@ class TodoApp {
         } else {
             this.currentPriority = priority;
         }
-        
+
         // Update UI and refresh tasks
         this.updateFloatingTagFilter();
         this.syncUIState();
@@ -3780,7 +3831,7 @@ class TodoApp {
         const filterBtn = document.getElementById('floatingTagFilterBtn');
         if (!filterBtn) return;
 
-        const hasActiveFilters = 
+        const hasActiveFilters =
             (this.currentIncludeTags && this.currentIncludeTags.length > 0) ||
             (this.currentExcludeTags && this.currentExcludeTags.length > 0) ||
             (this.currentPriority && this.currentPriority !== '');
@@ -3795,11 +3846,11 @@ class TodoApp {
     saveFloatingFilterPosition() {
         const floatingFilter = document.getElementById('floatingTagFilter');
         if (!floatingFilter) return;
-        
+
         // Get current position from transform or default position
         const transform = floatingFilter.style.transform;
         let x = 0, y = 0;
-        
+
         if (transform && transform !== 'none') {
             const matches = transform.match(/translate\(([^,]+)px,\s*([^)]+)px\)/);
             if (matches) {
@@ -3807,7 +3858,7 @@ class TodoApp {
                 y = parseInt(matches[2]) || 0;
             }
         }
-        
+
         // Save to localStorage
         try {
             localStorage.setItem('floatingFilterPosition', JSON.stringify({ x, y }));
@@ -3819,20 +3870,20 @@ class TodoApp {
     restoreFloatingFilterPosition() {
         const floatingFilter = document.getElementById('floatingTagFilter');
         if (!floatingFilter) return;
-        
+
         try {
             const saved = localStorage.getItem('floatingFilterPosition');
             if (saved) {
                 const { x, y } = JSON.parse(saved);
-                
+
                 // Validate position is within bounds
                 const maxX = window.innerWidth - floatingFilter.offsetWidth;
                 const maxY = window.innerHeight - floatingFilter.offsetHeight;
                 const minY = 20;
-                
+
                 const validX = Math.max(0, Math.min(x, maxX));
                 const validY = Math.max(minY, Math.min(y, maxY));
-                
+
                 floatingFilter.style.transform = `translate(${validX}px, ${validY}px)`;
             }
         } catch (error) {
@@ -3843,7 +3894,7 @@ class TodoApp {
     makeDraggable() {
         const floatingFilter = document.getElementById('floatingTagFilter');
         if (!floatingFilter) return;
-        
+
         let isDragging = false;
         let currentX;
         let currentY;
@@ -3851,19 +3902,19 @@ class TodoApp {
         let initialY;
         let xOffset = 0;
         let yOffset = 0;
-        
+
         const header = floatingFilter.querySelector('.floating-tag-filter-header');
-        
+
         // Mouse events
         header.addEventListener('mousedown', dragStart);
         document.addEventListener('mousemove', drag);
         document.addEventListener('mouseup', dragEnd);
-        
+
         // Touch events
         header.addEventListener('touchstart', dragStart, { passive: false });
         document.addEventListener('touchmove', drag, { passive: false });
         document.addEventListener('touchend', dragEnd);
-        
+
         function dragStart(e) {
             // Only start dragging if clicking/touching on the header (not buttons)
             const isHeaderDrag = (e.target === header) || (header.contains(e.target) && !e.target.closest('button'));
@@ -3889,54 +3940,102 @@ class TodoApp {
             initialX = clientX - xOffset;
             initialY = clientY - yOffset;
         }
-        
+
         function drag(e) {
             if (isDragging) {
                 e.preventDefault();
                 e.stopPropagation();
-                
+
                 // Get coordinates from mouse or touch
                 const clientX = e.clientX || (e.touches && e.touches[0].clientX);
                 const clientY = e.clientY || (e.touches && e.touches[0].clientY);
-                
+
                 currentX = clientX - initialX;
                 currentY = clientY - initialY;
-                
+
                 xOffset = currentX;
                 yOffset = currentY;
-                
+
                 // Keep window within viewport bounds
                 const maxX = window.innerWidth - floatingFilter.offsetWidth;
                 const maxY = window.innerHeight - floatingFilter.offsetHeight;
                 const minY = 20; // Keep at least 20px from top of screen
-                
+
                 currentX = Math.max(0, Math.min(currentX, maxX));
                 currentY = Math.max(minY, Math.min(currentY, maxY));
-                
+
                 floatingFilter.style.transform = `translate(${currentX}px, ${currentY}px)`;
             }
         }
-        
+
         function dragEnd() {
             if (isDragging) {
                 initialX = currentX;
                 initialY = currentY;
                 isDragging = false;
-                
+
                 // Remove dragging class and restore text selection
                 floatingFilter.classList.remove('dragging');
                 document.body.style.userSelect = '';
                 document.body.style.webkitUserSelect = '';
-                
+
                 // Save position after dragging stops
                 app.saveFloatingFilterPosition();
             }
         }
-        
+
         // Also save position on window resize to keep it valid
         window.addEventListener('resize', () => {
             app.saveFloatingFilterPosition();
         });
+    }
+    updateSyncStatusIndicator(status = 'healthy') {
+        const indicator = document.getElementById('syncStatusIndicator');
+        if (!indicator) return;
+
+        // Remove all status classes
+        indicator.classList.remove('visible', 'error', 'warning');
+
+        // Add appropriate status
+        if (status === 'healthy') {
+            indicator.classList.add('visible');
+        } else if (status === 'error') {
+            indicator.classList.add('visible', 'error');
+        } else if (status === 'warning') {
+            indicator.classList.add('visible', 'warning');
+        }
+
+        // Auto-hide after 3 seconds for success
+        if (status === 'healthy') {
+            setTimeout(() => {
+                indicator.classList.remove('visible');
+            }, 3000);
+        }
+    }
+
+    // Periodic sync health monitoring
+    startSyncHealthMonitoring() {
+        if (!window.Capacitor || !window.Capacitor.isNativePlatform()) return;
+
+        // Check sync health every 30 seconds
+        setInterval(async () => {
+            try {
+                if (window.RobustiCloudSync && window.RobustiCloudSync.performHealthCheck) {
+                    const health = await window.RobustiCloudSync.performHealthCheck();
+
+                    if (health.status === 'healthy') {
+                        this.updateSyncStatusIndicator('healthy');
+                    } else if (health.status === 'critical') {
+                        this.updateSyncStatusIndicator('error');
+                    } else {
+                        this.updateSyncStatusIndicator('warning');
+                    }
+                }
+            } catch (error) {
+                console.warn('Sync health monitoring error:', error);
+                this.updateSyncStatusIndicator('error');
+            }
+        }, 30000); // 30 seconds
     }
 }
 
@@ -3985,6 +4084,12 @@ function closeFloatingTagFilter() {
 function clearAllFilters() {
     if (window.app) {
         app.clearAllFilters();
+    }
+}
+
+function toggleSubtasksVisibility(taskId, event) {
+    if (window.app) {
+        app.toggleSubtasksVisibility(taskId, event);
     }
 }
 
