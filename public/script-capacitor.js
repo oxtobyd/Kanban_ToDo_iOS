@@ -83,12 +83,33 @@ class TodoApp {
 
         // Register for data change notifications to refresh UI
         window.__suppressNextAutoRefresh = false;
+        window.__lastLocalChange = null; // Track when local changes were made
+        window.__saveInProgress = false; // Prevent multiple simultaneous saves
+        window.__syncDisabled = false; // Track if sync is temporarily disabled
         window.RobustDataService.addChangeListener(() => {
+            console.log('Change listener triggered - suppressNextAutoRefresh:', window.__suppressNextAutoRefresh, 'lastLocalChange:', window.__lastLocalChange);
+            
             if (window.__suppressNextAutoRefresh) {
+                console.log('Suppressing UI refresh due to suppressNextAutoRefresh flag');
                 window.__suppressNextAutoRefresh = false;
                 return;
             }
+            
+            // Check if we have recent local changes (within last 10 seconds)
+            const now = Date.now();
+            if (window.__lastLocalChange && (now - window.__lastLocalChange) < 10000) {
+                console.log('Skipping UI refresh - recent local changes detected (age:', now - window.__lastLocalChange, 'ms)');
+                return;
+            }
+            
+            console.log('Data change detected, refreshing UI...');
             this.loadTasks();
+
+            // Also refresh notes modal if it's currently open
+            if (this.currentTaskId && document.getElementById('notesModal').style.display !== 'none') {
+                console.log('Refreshing notes modal for task:', this.currentTaskId);
+                this.loadNotes(this.currentTaskId);
+            }
         });
         // Bust any cached assets by appending a cache-busting param to fetches if needed
 
@@ -230,6 +251,9 @@ class TodoApp {
     }
 
     async manualSync() {
+        // Close mobile actions menu first
+        this.closeMobileActions();
+        
         if (!window.Capacitor || !window.Capacitor.isNativePlatform()) {
             return;
         }
@@ -248,6 +272,8 @@ class TodoApp {
                 const validation = await window.RobustDataService.validateDataIntegrity();
                 if (!validation.isValid) {
                     console.warn('Data integrity issues found:', validation.issues);
+                    // Notify user of data integrity issues
+                    this.showDataIntegrityNotification(validation.issues, 'before sync');
                 }
             }
 
@@ -260,6 +286,8 @@ class TodoApp {
                     const postSyncValidation = await window.RobustDataService.validateDataIntegrity();
                     if (!postSyncValidation.isValid) {
                         console.error('Data integrity issues after sync:', postSyncValidation.issues);
+                        // Notify user of data integrity issues
+                        this.showDataIntegrityNotification(postSyncValidation.issues, 'after sync');
                     }
                 }
 
@@ -510,6 +538,9 @@ class TodoApp {
             // Update task count
             const countElement = document.querySelector(`[data-status="${status}"] .task-count`);
             countElement.textContent = tasks.length;
+
+            // Update mobile badge count
+            this.updateMobileBadgeCount(status, tasks.length);
         }
 
         // Add touch feedback to all task action buttons on mobile
@@ -603,11 +634,30 @@ class TodoApp {
         });
     }
 
+    updateMobileBadgeCount(status, count) {
+        const badge = document.getElementById(`mobile-count-${status}`);
+        if (badge) {
+            badge.textContent = count;
+            badge.setAttribute('data-count', count);
+
+            // Hide badge if count is 0, show if count > 0
+            if (count === 0) {
+                badge.style.display = 'none';
+            } else {
+                badge.style.display = 'flex';
+            }
+        }
+    }
+
     async createTaskHTML(task) {
         const createdDate = new Date(task.created_at).toLocaleDateString();
         const priorityClass = `priority-${task.priority || 'medium'}`;
         const priorityLabel = this.getPriorityLabel(task.priority || 'medium');
         const isExpanded = this.expandedTasks && this.expandedTasks.has(task.id);
+
+        // Get notes count for this task
+        const taskNotes = await window.RobustDataService.getNotesByTaskId(task.id);
+        const notesCount = taskNotes ? taskNotes.length : 0;
 
         // Make URLs clickable and highlight search terms
         let title = this.makeUrlsClickable(task.title);
@@ -637,7 +687,10 @@ class TodoApp {
         return `
             <div class="task-card ${priorityClass} ${isExpanded ? 'expanded' : ''}" draggable="${this.isDragAndDropEnabled() ? 'true' : 'false'}" data-task-id="${task.id}">
                 <div class="task-header" onclick="app.toggleTaskExpansion(${task.id})" title="Click to expand/collapse task details">
-                    <div class="task-title">${title}</div>
+                    <div class="task-title-container">
+                        <div class="task-title">${title}</div>
+                        <div class="task-created-date">${createdDate}</div>
+                    </div>
                     <div class="task-header-actions" onclick="event.stopPropagation()">
                         <div class="priority-badge priority-${task.priority || 'medium'}" onclick="app.showPriorityDropdown(event, ${task.id}, '${task.priority || 'medium'}')" title="Click to change priority">${priorityLabel}</div>
                         <div class="drag-handle">⋮⋮</div>
@@ -658,6 +711,7 @@ class TodoApp {
                                 <line x1="16" y1="17" x2="8" y2="17"></line>
                                 <polyline points="10,9 9,9 8,9"></polyline>
                             </svg>
+                            ${notesCount > 0 ? `<span class="notes-badge">${notesCount}</span>` : ''}
                         </button>
                         <button class="edit-btn" onclick="app.editTask(${task.id})" title="Edit">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -682,6 +736,7 @@ class TodoApp {
     async renderSubtasks(taskId) {
         try {
             const subtasks = await window.RobustDataService.getSubtasks(taskId);
+            console.log('renderSubtasks for task', taskId, 'found', subtasks.length, 'subtasks:', subtasks.map(s => ({ id: s.id, deleted: s.deleted, title: s.title })));
             const completedCount = subtasks.filter(st => st.completed).length;
             const totalCount = subtasks.length;
 
@@ -696,10 +751,10 @@ class TodoApp {
                             <div class="subtask-item ${subtask.completed ? 'completed' : ''}" id="subtask-item-${subtask.id}">
                                 <input id="subtask-checkbox-${subtask.id}" data-subtask-id="${subtask.id}" type="checkbox" ${subtask.completed ? 'checked' : ''} 
                                        onchange="app.toggleSubtask(${subtask.id}, this.checked)" />
-                                <span class="subtask-title" ondblclick="app.editSubtask(${subtask.id}, '${this.escapeHtml(subtask.title).replace(/'/g, "\\'")}')">
+                                <span class="subtask-title">
                                     ${this.makeUrlsClickable(subtask.title)}
                                 </span>
-                                <button class="delete-subtask-btn" onclick="app.deleteSubtask(${subtask.id})" title="Delete">×</button>
+                                <button class="delete-subtask-btn" onclick="app.deleteSubtask(${subtask.id}); return false;" title="Delete">×</button>
                             </div>
                         `).join('')}
                         <div class="add-subtask">
@@ -1709,6 +1764,9 @@ class TodoApp {
         const tags = this.currentTaskTags;
 
         if (!title) return;
+        
+        // Track local change timestamp to prevent sync override
+        window.__lastLocalChange = Date.now();
 
         // Allow blank pending reasons - no validation needed
 
@@ -2391,7 +2449,16 @@ class TodoApp {
         if (!confirm('Are you sure you want to delete this note?')) return;
 
         try {
-            await window.RobustDataService.deleteNote(noteId);
+            console.log('Deleting note:', noteId);
+            const result = await window.RobustDataService.deleteNote(noteId);
+            console.log('Note deletion result:', result);
+
+            // Force a manual sync to ensure deletion is propagated
+            if (window.RobustDataService.manualSync) {
+                console.log('Triggering manual sync after note deletion');
+                await window.RobustDataService.manualSync();
+            }
+
             await this.loadNotes(this.currentTaskId);
         } catch (error) {
             console.error('Error deleting note:', error);
@@ -2401,12 +2468,43 @@ class TodoApp {
 
 
     async toggleSubtask(subtaskId, checked) {
+        console.log('toggleSubtask called with:', { subtaskId, checked });
+        
+        // Check if the checkbox state matches what we expect
+        const checkbox = document.getElementById(`subtask-checkbox-${subtaskId}`);
+        if (checkbox && checkbox.checked === checked) {
+            console.log('Checkbox state already matches, skipping toggle');
+            return;
+        }
+        
+        // Prevent multiple rapid calls to the same subtask
+        const key = `toggle_${subtaskId}`;
+        if (window.__toggleInProgress && window.__toggleInProgress[key]) {
+            console.log('Toggle already in progress for subtask:', subtaskId);
+            return;
+        }
+        
+        if (!window.__toggleInProgress) {
+            window.__toggleInProgress = {};
+        }
+        window.__toggleInProgress[key] = true;
+        
         try {
             const intended = !!checked;
-            // Suppress one auto refresh caused by save notification
+            // Track local change timestamp to prevent sync override
+            window.__lastLocalChange = Date.now();
+            // Temporarily disable sync to prevent conflicts
+            window.__syncDisabled = true;
+            // Suppress change listener notifications during this operation
             window.__suppressNextAutoRefresh = true;
+            
             const result = await window.RobustDataService.updateSubtask(subtaskId, { completed: intended });
-            await this.loadTasks(null, null, null, null, null, true); // Force refresh UI
+            
+            // Small delay to ensure the update completes before refreshing UI
+            await new Promise(resolve => setTimeout(resolve, 100));
+            
+            // Force refresh UI immediately to show the change
+            await this.loadTasks(null, null, null, null, null, true);
             // Ensure checkbox reflects intended state immediately
             try {
                 const cb = document.getElementById(`subtask-checkbox-${subtaskId}`);
@@ -2417,17 +2515,18 @@ class TodoApp {
                     else container.classList.remove('completed');
                 }
             } catch (_) { }
-            // Verify persisted state once after reload
-            try {
-                const sub = await window.RobustDataService.getSubtaskById(subtaskId);
-                if (sub && sub.completed !== intended) {
-                    console.warn('Subtask state mismatch after reload; re-applying once', { intended, actual: sub.completed });
-                    await window.RobustDataService.updateSubtask(subtaskId, { completed: intended });
-                    await this.loadTasks(null, null, null, null, null, true);
-                }
-            } catch (_) { }
+            // Re-enable sync after a delay to allow the save to complete
+            setTimeout(() => {
+                window.__syncDisabled = false;
+                console.log('Sync re-enabled after local change');
+            }, 5000); // 5 seconds
         } catch (error) {
             console.error('Error toggling subtask:', error);
+        } finally {
+            // Clear the toggle in progress flag
+            if (window.__toggleInProgress) {
+                delete window.__toggleInProgress[key];
+            }
         }
     }
 
@@ -2444,14 +2543,33 @@ class TodoApp {
     }
 
     async deleteSubtask(subtaskId) {
+        console.log('deleteSubtask called with:', subtaskId);
         if (!confirm('Are you sure you want to delete this subtask?')) return;
+
+        // Track local change timestamp to prevent sync override
+        window.__lastLocalChange = Date.now();
+        // Temporarily disable sync to prevent conflicts
+        window.__syncDisabled = true;
+        // Suppress change listener notifications during this operation
+        window.__suppressNextAutoRefresh = true;
 
         try {
             const success = await window.RobustDataService.deleteSubtask(subtaskId);
             if (!success) {
                 console.warn('Delete subtask reported false; attempting hard refresh');
             }
-            await this.loadTasks(null, null, null, null, null, true); // Force refresh after delete
+            
+            // Small delay to ensure the delete completes before refreshing UI
+            await new Promise(resolve => setTimeout(resolve, 100));
+            
+            // Force refresh UI immediately to show the change
+            await this.loadTasks(null, null, null, null, null, true);
+            
+            // Re-enable sync after a delay to allow the save to complete
+            setTimeout(() => {
+                window.__syncDisabled = false;
+                console.log('Sync re-enabled after delete');
+            }, 5000); // 5 seconds
         } catch (error) {
             console.error('Error deleting subtask:', error);
             await this.loadTasks(null, null, null, null, null, true); // Ensure UI reflects current state
@@ -2633,19 +2751,12 @@ class TodoApp {
         }
     }
 
-    async deleteSubtask(subtaskId) {
-        if (!confirm('Delete this subtask?')) return;
-
-        try {
-            await window.RobustDataService.deleteSubtask(subtaskId);
-            await this.loadTasks(null, null, null, null, null, true); // Force refresh after delete
-        } catch (error) {
-            console.error('Error deleting subtask:', error);
-        }
-    }
 
     // Import/Export methods
     async exportData() {
+        // Close mobile actions menu first
+        this.closeMobileActions();
+        
         try {
             const exportData = await window.RobustDataService.exportData();
 
@@ -2737,6 +2848,9 @@ class TodoApp {
     }
 
     openImportModal() {
+        // Close mobile actions menu first
+        this.closeMobileActions();
+        
         const modal = document.getElementById('importModal');
         modal.style.display = 'block';
         this.setupFileUpload();
@@ -3185,8 +3299,72 @@ class TodoApp {
     // Manual sync method
     async manualSync() {
         try {
+            console.log('=== MANUAL SYNC TRIGGERED ===');
+            console.log('Current notes before sync:', window.RobustDataService.notes.length);
+            console.log('Deleted notes before sync:', window.RobustDataService.notes.filter(n => n.deleted).length);
+
             this.showNotification('Syncing with iCloud...', 'info');
-            await window.RobustDataService.manualSync();
+
+            // Force fresh iCloud read by bypassing cache
+            console.log('Manual sync: Forcing fresh iCloud read...');
+
+            // Try direct iCloud read with multiple attempts and delays
+            let freshData = null;
+            for (let attempt = 1; attempt <= 5; attempt++) {
+                console.log(`Fresh read attempt ${attempt}...`);
+
+                try {
+                    // Direct call to iCloud plugin with delay
+                    await new Promise(resolve => setTimeout(resolve, attempt * 500));
+
+                    const result = await window.Capacitor.Plugins.iCloudPreferences.get({
+                        key: 'kanban-data'
+                    });
+
+                    if (result.value) {
+                        const data = JSON.parse(result.value);
+                        console.log(`Attempt ${attempt} got:`, {
+                            timestamp: data.lastSync,
+                            notes: data.notes?.length || 0,
+                            deletedNotes: data.notes?.filter(n => n.deleted)?.length || 0
+                        });
+
+                        // Check if this is newer than our current data
+                        const currentTime = window.RobustDataService.lastSyncTime;
+                        if (!currentTime || new Date(data.lastSync) > new Date(currentTime)) {
+                            console.log(`Found newer data on attempt ${attempt}!`);
+                            freshData = data;
+                            break;
+                        } else if (attempt === 5) {
+                            // Use whatever we got on the last attempt
+                            freshData = data;
+                            break;
+                        }
+                    }
+                } catch (error) {
+                    console.log(`Attempt ${attempt} failed:`, error);
+                }
+            }
+
+            if (freshData) {
+                console.log('Importing fresh data:', {
+                    timestamp: freshData.lastSync,
+                    notes: freshData.notes?.length || 0,
+                    deletedNotes: freshData.notes?.filter(n => n.deleted)?.length || 0
+                });
+
+                // Import the fresh data
+                await window.RobustDataService.importData({ data: freshData }, { clearExisting: true });
+                window.RobustDataService.lastSyncTime = freshData.lastSync;
+                window.RobustDataService.notifyChangeListeners();
+            } else {
+                console.log('No fresh data found after all attempts');
+            }
+
+            console.log('Notes after sync:', window.RobustDataService.notes.length);
+            console.log('Deleted notes after sync:', window.RobustDataService.notes.filter(n => n.deleted).length);
+            console.log('Active notes after sync:', window.RobustDataService.getNotes().length);
+
             this.showNotification('Sync completed successfully!', 'success');
         } catch (error) {
             console.error('Error during manual sync:', error);
@@ -4013,11 +4191,436 @@ class TodoApp {
         }
     }
 
+    // Show data integrity notification to user
+    showDataIntegrityNotification(issues, context = '') {
+        try {
+            const issueCount = issues.length;
+            const message = `Data integrity issues detected ${context}: ${issueCount} problem${issueCount > 1 ? 's' : ''} found. Check console for details.`;
+            
+            // Show toast notification
+            if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Toast) {
+                window.Capacitor.Plugins.Toast.show({
+                    text: message,
+                    duration: 'long'
+                });
+            } else {
+                // Fallback to alert for web
+                alert(message);
+            }
+            
+            // Log detailed issues
+            console.warn(`Data integrity issues ${context}:`, issues);
+            
+            // Update sync status to warning
+            this.updateSyncStatusIndicator('warning');
+            
+        } catch (error) {
+            console.error('Failed to show data integrity notification:', error);
+        }
+    }
+
+    // Fix iCloud Sync functionality
+    async fixICloudSync() {
+        if (!window.Capacitor || !window.Capacitor.isNativePlatform()) {
+            alert('iCloud sync fix is only available on native platforms');
+            return;
+        }
+
+        try {
+            // Show loading indicator
+            const syncBtn = document.querySelector('.sync-btn');
+            if (syncBtn) {
+                syncBtn.classList.add('syncing');
+                syncBtn.disabled = true;
+            }
+
+            // Close mobile actions if open
+            this.closeMobileActions();
+
+            // Run the fix process
+            if (window.SyncMigration && window.SyncMigration.fixICloudSync) {
+                const result = await window.SyncMigration.fixICloudSync();
+                
+                if (result.success) {
+                    // Show success message
+                    if (window.Capacitor.Plugins.Toast) {
+                        window.Capacitor.Plugins.Toast.show({
+                            text: result.message,
+                            duration: 'long'
+                        });
+                    } else {
+                        alert(result.message);
+                    }
+                    
+                    // Update sync status
+                    this.updateSyncStatusIndicator('healthy');
+                    
+                    // Refresh data to show migrated content
+                    await this.loadTasks();
+                } else {
+                    // Show error message
+                    if (window.Capacitor.Plugins.Toast) {
+                        window.Capacitor.Plugins.Toast.show({
+                            text: result.message,
+                            duration: 'long'
+                        });
+                    } else {
+                        alert(result.message);
+                    }
+                    
+                    this.updateSyncStatusIndicator('error');
+                }
+            } else {
+                throw new Error('Sync migration service not available');
+            }
+
+        } catch (error) {
+            console.error('Fix iCloud sync failed:', error);
+            
+            const errorMessage = `Fix iCloud sync failed: ${error.message}`;
+            if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Toast) {
+                window.Capacitor.Plugins.Toast.show({
+                    text: errorMessage,
+                    duration: 'long'
+                });
+            } else {
+                alert(errorMessage);
+            }
+            
+            this.updateSyncStatusIndicator('error');
+        } finally {
+            // Remove loading indicator
+            const syncBtn = document.querySelector('.sync-btn');
+            if (syncBtn) {
+                syncBtn.classList.remove('syncing');
+                syncBtn.disabled = false;
+            }
+        }
+    }
+
+    // Debug sync functionality
+    async debugSync() {
+        if (!window.Capacitor || !window.Capacitor.isNativePlatform()) {
+            alert('Sync debugging is only available on native platforms');
+            return;
+        }
+
+        try {
+            // Close mobile actions if open
+            this.closeMobileActions();
+
+            // Show loading message
+            if (window.Capacitor.Plugins.Toast) {
+                window.Capacitor.Plugins.Toast.show({
+                    text: 'Running sync debug...',
+                    duration: 'short'
+                });
+            }
+
+            // Run the debug process
+            if (window.RobustiCloudSync && window.RobustiCloudSync.debugCrossDeviceSync) {
+                const result = await window.RobustiCloudSync.debugCrossDeviceSync();
+                
+                // Show results
+                const message = result.success ? 
+                    `Debug completed! Check console for details. Device: ${result.debugInfo.deviceId}` :
+                    `Debug failed: ${result.error}`;
+                
+                if (window.Capacitor.Plugins.Toast) {
+                    window.Capacitor.Plugins.Toast.show({
+                        text: message,
+                        duration: 'long'
+                    });
+                } else {
+                    alert(message);
+                }
+                
+                // Also log to console for Xcode
+                console.log('🔍 Sync Debug Results:', result);
+                
+            } else {
+                throw new Error('Debug functionality not available');
+            }
+
+        } catch (error) {
+            console.error('Debug sync failed:', error);
+            
+            const errorMessage = `Debug failed: ${error.message}`;
+            if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Toast) {
+                window.Capacitor.Plugins.Toast.show({
+                    text: errorMessage,
+                    duration: 'long'
+                });
+            } else {
+                alert(errorMessage);
+            }
+        }
+    }
+
+    // Force immediate sync check with aggressive iCloud refresh
+    async forceSyncCheck() {
+        if (!window.Capacitor || !window.Capacitor.isNativePlatform()) {
+            alert('Force sync is only available on native platforms');
+            return;
+        }
+
+        try {
+            // Close mobile actions if open
+            this.closeMobileActions();
+
+            // Show loading message
+            if (window.Capacitor.Plugins.Toast) {
+                window.Capacitor.Plugins.Toast.show({
+                    text: 'Force checking for updates...',
+                    duration: 'short'
+                });
+            }
+
+            console.log('🔄 Force sync check initiated - attempting aggressive iCloud refresh');
+
+            // Method 1: Force check for external changes
+            if (window.RobustiCloudSync && window.RobustiCloudSync.checkForExternalChanges) {
+                const hadChanges = await window.RobustiCloudSync.checkForExternalChanges();
+                if (hadChanges) {
+                    console.log('✅ Found changes via external change check');
+                    if (window.Capacitor.Plugins.Toast) {
+                        window.Capacitor.Plugins.Toast.show({
+                            text: 'Updates found and applied!',
+                            duration: 'short'
+                        });
+                    }
+                    return;
+                }
+            }
+
+            // Method 2: Aggressive iCloud refresh with multiple strategies
+            console.log('🔄 Attempting aggressive iCloud refresh...');
+            let freshData = null;
+            
+            // Strategy 1: Multiple direct reads with delays
+            for (let attempt = 1; attempt <= 5; attempt++) {
+                try {
+                    console.log(`Direct iCloud read attempt ${attempt}...`);
+                    
+                    // Add delay between attempts to allow iCloud to propagate
+                    if (attempt > 1) {
+                        await new Promise(resolve => setTimeout(resolve, 2000 * attempt));
+                    }
+                    
+                    const result = await window.Capacitor.Plugins.iCloudPreferences.get({
+                        key: 'kanban-data'
+                    });
+
+                    if (result.value) {
+                        const data = JSON.parse(result.value);
+                        console.log(`Attempt ${attempt} got data:`, {
+                            timestamp: data.lastSync,
+                            tasks: data.tasks?.length || 0,
+                            notes: data.notes?.length || 0,
+                            deviceId: data.deviceId
+                        });
+
+                        // Check if this is newer than our current data
+                        const currentTime = window.RobustDataService?.lastSyncTime;
+                        if (!currentTime || new Date(data.lastSync) > new Date(currentTime)) {
+                            console.log(`✅ Found newer data on attempt ${attempt}!`);
+                            freshData = data;
+                            break;
+                        } else {
+                            console.log(`⏭️ Data is not newer on attempt ${attempt}, trying again...`);
+                        }
+                    }
+                } catch (error) {
+                    console.log(`Attempt ${attempt} failed:`, error);
+                }
+            }
+            
+            // Strategy 2: Force iCloud refresh by writing and reading
+            if (!freshData) {
+                console.log('🔄 Strategy 2: Force iCloud refresh by writing test data...');
+                try {
+                    // Write a small test to force iCloud refresh
+                    await window.Capacitor.Plugins.iCloudPreferences.set({
+                        key: 'kanban-sync-test',
+                        value: JSON.stringify({
+                            test: true,
+                            timestamp: Date.now(),
+                            deviceId: window.RobustDataService?.deviceId
+                        })
+                    });
+                    
+                    // Wait a moment for iCloud to process
+                    await new Promise(resolve => setTimeout(resolve, 3000));
+                    
+                    // Now try to read the main data again
+                    const result = await window.Capacitor.Plugins.iCloudPreferences.get({
+                        key: 'kanban-data'
+                    });
+                    
+                    if (result.value) {
+                        const data = JSON.parse(result.value);
+                        console.log('Strategy 2 got data:', {
+                            timestamp: data.lastSync,
+                            tasks: data.tasks?.length || 0,
+                            notes: data.notes?.length || 0
+                        });
+                        freshData = data;
+                    }
+                    
+                    // Clean up test data
+                    await window.Capacitor.Plugins.iCloudPreferences.remove({
+                        key: 'kanban-sync-test'
+                    });
+                } catch (error) {
+                    console.log('Strategy 2 failed:', error);
+                }
+            }
+
+            // Strategy 3: Force complete iCloud refresh
+            if (!freshData) {
+                console.log('🔄 Strategy 3: Force complete iCloud refresh...');
+                try {
+                    // Remove and re-add the key to force iCloud refresh
+                    await window.Capacitor.Plugins.iCloudPreferences.remove({
+                        key: 'kanban-data'
+                    });
+                    
+                    // Wait for iCloud to process the removal
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                    
+                    // Try to read again - this should trigger a fresh sync
+                    const result = await window.Capacitor.Plugins.iCloudPreferences.get({
+                        key: 'kanban-data'
+                    });
+                    
+                    if (result.value) {
+                        const data = JSON.parse(result.value);
+                        console.log('Strategy 3 got data:', {
+                            timestamp: data.lastSync,
+                            tasks: data.tasks?.length || 0,
+                            notes: data.notes?.length || 0
+                        });
+                        freshData = data;
+                    }
+                } catch (error) {
+                    console.log('Strategy 3 failed:', error);
+                }
+            }
+
+            if (freshData) {
+                console.log('🔄 Importing fresh data from iCloud...');
+                await window.RobustDataService.importData({ data: freshData }, { clearExisting: true });
+                window.RobustDataService.lastSyncTime = freshData.lastSync;
+                window.RobustDataService.notifyChangeListeners();
+                
+                if (window.Capacitor.Plugins.Toast) {
+                    window.Capacitor.Plugins.Toast.show({
+                        text: `Updated! Found ${freshData.tasks?.length || 0} tasks`,
+                        duration: 'short'
+                    });
+                }
+            } else {
+                console.log('❌ No fresh data found after all strategies');
+                if (window.Capacitor.Plugins.Toast) {
+                    window.Capacitor.Plugins.Toast.show({
+                        text: 'iCloud sync delay detected - try again in a few minutes',
+                        duration: 'long'
+                    });
+                }
+            }
+
+        } catch (error) {
+            console.error('Force sync check failed:', error);
+            
+            const errorMessage = `Force sync failed: ${error.message}`;
+            if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Toast) {
+                window.Capacitor.Plugins.Toast.show({
+                    text: errorMessage,
+                    duration: 'long'
+                });
+            } else {
+                alert(errorMessage);
+            }
+        }
+    }
+
+    // Emergency data recovery function
+    async emergencyDataRecovery() {
+        if (!window.Capacitor || !window.Capacitor.isNativePlatform()) {
+            alert('Data recovery is only available on native platforms');
+            return;
+        }
+
+        try {
+            // Show loading message
+            if (window.Capacitor.Plugins.Toast) {
+                window.Capacitor.Plugins.Toast.show({
+                    text: 'Starting emergency data recovery...',
+                    duration: 'short'
+                });
+            }
+
+            console.log('🚨 EMERGENCY DATA RECOVERY STARTED');
+
+            // Step 1: Clear corrupted iCloud data
+            console.log('🧹 Step 1: Clearing corrupted iCloud data...');
+            await window.Capacitor.Plugins.iCloudPreferences.remove({
+                key: 'kanban-data'
+            });
+
+            // Step 2: Force save current local data to iCloud
+            console.log('💾 Step 2: Force saving local data to iCloud...');
+            if (window.RobustDataService) {
+                await window.RobustDataService.saveToStorage();
+            }
+
+            // Step 3: Verify data was saved
+            console.log('✅ Step 3: Verifying data was saved...');
+            const verifyResult = await window.Capacitor.Plugins.iCloudPreferences.get({
+                key: 'kanban-data'
+            });
+
+            if (verifyResult.value) {
+                const savedData = JSON.parse(verifyResult.value);
+                console.log('✅ Data successfully saved to iCloud:', {
+                    tasks: savedData.tasks?.length || 0,
+                    notes: savedData.notes?.length || 0,
+                    subtasks: savedData.subtasks?.length || 0
+                });
+
+                // Show success message
+                if (window.Capacitor.Plugins.Toast) {
+                    window.Capacitor.Plugins.Toast.show({
+                        text: `Emergency recovery completed! Saved ${savedData.tasks?.length || 0} tasks to iCloud.`,
+                        duration: 'long'
+                    });
+                } else {
+                    alert(`Emergency recovery completed! Saved ${savedData.tasks?.length || 0} tasks to iCloud.`);
+                }
+            } else {
+                throw new Error('Failed to verify data was saved to iCloud');
+            }
+
+        } catch (error) {
+            console.error('❌ Emergency data recovery failed:', error);
+            
+            const errorMessage = `Emergency recovery failed: ${error.message}`;
+            if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Toast) {
+                window.Capacitor.Plugins.Toast.show({
+                    text: errorMessage,
+                    duration: 'long'
+                });
+            } else {
+                alert(errorMessage);
+            }
+        }
+    }
+
     // Periodic sync health monitoring
     startSyncHealthMonitoring() {
         if (!window.Capacitor || !window.Capacitor.isNativePlatform()) return;
 
-        // Check sync health every 30 seconds
+        // Check sync health and updates every 30 seconds (battery optimized)
         setInterval(async () => {
             try {
                 if (window.RobustiCloudSync && window.RobustiCloudSync.performHealthCheck) {
@@ -4031,11 +4634,19 @@ class TodoApp {
                         this.updateSyncStatusIndicator('warning');
                     }
                 }
+
+                // Also check for updates periodically since change listeners might not fire
+                if (window.RobustDataService && window.RobustDataService.manualSync && !window.__syncDisabled) {
+                    console.log('Performing periodic sync check...');
+                    await window.RobustDataService.manualSync();
+                } else if (window.__syncDisabled) {
+                    console.log('Skipping periodic sync - sync disabled for local changes');
+                }
             } catch (error) {
                 console.warn('Sync health monitoring error:', error);
                 this.updateSyncStatusIndicator('error');
             }
-        }, 30000); // 30 seconds
+        }, 30000); // 30 seconds (battery optimized)
     }
 }
 
@@ -4045,6 +4656,23 @@ function openTaskModal(taskId = null) {
         app.openTaskModal(taskId);
     }
 }
+
+// Global debug function for cross-device sync issues
+async function debugCrossDeviceSync() {
+    console.log('🔍 Starting cross-device sync debug...');
+    
+    if (window.RobustiCloudSync && window.RobustiCloudSync.debugCrossDeviceSync) {
+        const result = await window.RobustiCloudSync.debugCrossDeviceSync();
+        console.log('🔍 Cross-device sync debug result:', result);
+        return result;
+    } else {
+        console.error('❌ Robust iCloud sync not available for debugging');
+        return { success: false, error: 'Robust iCloud sync not available' };
+    }
+}
+
+// Make debug function globally available
+window.debugCrossDeviceSync = debugCrossDeviceSync;
 
 function closeTaskModal() {
     app.closeTaskModal();

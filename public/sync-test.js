@@ -129,50 +129,6 @@ class SyncTest {
 window.SyncTest = new SyncTest();
 console.log('Sync Test helper initialized:', window.SyncTest);
 
-// Add sync status check function
-window.SyncTest.checkSyncStatus = async function() {
-    console.log('=== SYNC STATUS CHECK ===');
-    
-    if (!this.isCapacitor) {
-        console.log('Platform: Web (no iCloud sync)');
-        return { platform: 'web' };
-    }
-
-    console.log('Platform: Native iOS');
-    
-    // Check if robust sync is available
-    if (!window.RobustiCloudSync) {
-        console.error('❌ Robust iCloud sync not available');
-        return { platform: 'native', robustSyncAvailable: false };
-    }
-    
-    console.log('✅ Robust iCloud sync available');
-    
-    // Get detailed sync status
-    const syncStatus = await window.RobustiCloudSync.getSyncStatus();
-    console.log('Sync Status:', syncStatus);
-    
-    // Check for old sync systems
-    console.log('=== CHECKING FOR OLD SYNC SYSTEMS ===');
-    if (window.iCloudSyncProper) {
-        console.log('⚠️ Old proper iCloud sync still active');
-        try {
-            const oldData = await window.iCloudSyncProper.loadFromiCloud();
-            if (oldData) {
-                console.log('Old sync data found:', {
-                    tasks: oldData.tasks?.length || 0,
-                    lastSync: oldData.lastSync
-                });
-            }
-        } catch (e) {
-            console.log('Old sync not accessible:', e.message);
-        }
-    }
-    
-    console.log('=== END SYNC STATUS ===');
-    return { platform: 'native', robustSyncAvailable: true, syncStatus };
-};
-
 // Auto-run quick test on load
 if (window.Capacitor && window.Capacitor.isNativePlatform()) {
     setTimeout(async () => {

@@ -213,10 +213,22 @@
 
     <!-- Mobile bottom segmented control -->
     <div class="mobile-bottom-bar" id="mobileBottomBar" style="display:none;" role="tablist" aria-label="Kanban columns">
-        <button class="mobile-segment" data-col="todo" role="tab" aria-selected="true" aria-controls="todo-list" onclick="app.setMobileColumn('todo')">To Do</button>
-        <button class="mobile-segment" data-col="in_progress" role="tab" aria-selected="false" aria-controls="in_progress-list" onclick="app.setMobileColumn('in_progress')">In Progress</button>
-        <button class="mobile-segment" data-col="pending" role="tab" aria-selected="false" aria-controls="pending-list" onclick="app.setMobileColumn('pending')">Pending</button>
-        <button class="mobile-segment" data-col="done" role="tab" aria-selected="false" aria-controls="done-list" onclick="app.setMobileColumn('done')">Done</button>
+        <button class="mobile-segment" data-col="todo" role="tab" aria-selected="true" aria-controls="todo-list" onclick="app.setMobileColumn('todo')">
+            To Do
+            <span class="mobile-count-badge" id="mobile-count-todo">0</span>
+        </button>
+        <button class="mobile-segment" data-col="in_progress" role="tab" aria-selected="false" aria-controls="in_progress-list" onclick="app.setMobileColumn('in_progress')">
+            In Progress
+            <span class="mobile-count-badge" id="mobile-count-in_progress">0</span>
+        </button>
+        <button class="mobile-segment" data-col="pending" role="tab" aria-selected="false" aria-controls="pending-list" onclick="app.setMobileColumn('pending')">
+            Pending
+            <span class="mobile-count-badge" id="mobile-count-pending">0</span>
+        </button>
+        <button class="mobile-segment" data-col="done" role="tab" aria-selected="false" aria-controls="done-list" onclick="app.setMobileColumn('done')">
+            Done
+            <span class="mobile-count-badge" id="mobile-count-done">0</span>
+        </button>
     </div>
 
     <!-- Mobile floating Add Task button -->

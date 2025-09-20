@@ -485,8 +485,8 @@ body[data-theme="dark"] .task-actions .delete-btn { color: #f87171; }
 body[data-theme="dark"] .task-count { background: #334155; color: #e5e7eb; }
 body[data-theme="dark"] .mobile-segment { background: #0b1220; color: #e5e7eb; border-color: #334155; }
 body[data-theme="dark"] .mobile-segment.active { background: #111827; border-color: #818cf8; color: #e5e7eb; }
-body[data-theme="dark"] .print-btn, body[data-theme="dark"] .export-btn, body[data-theme="dark"] .import-btn, body[data-theme="dark"] .sync-btn { background: #111827; border-color: #334155; color: #e5e7eb; }
-body[data-theme="dark"] .print-btn:hover, body[data-theme="dark"] .export-btn:hover, body[data-theme="dark"] .import-btn:hover, body[data-theme="dark"] .sync-btn:hover { background: #0b1220; }
+body[data-theme="dark"] .print-btn, body[data-theme="dark"] .export-btn, body[data-theme="dark"] .import-btn, body[data-theme="dark"] .sync-btn, body[data-theme="dark"] .debug-btn { background: #111827; border-color: #334155; color: #e5e7eb; }
+body[data-theme="dark"] .print-btn:hover, body[data-theme="dark"] .export-btn:hover, body[data-theme="dark"] .import-btn:hover, body[data-theme="dark"] .sync-btn:hover, body[data-theme="dark"] .debug-btn:hover { background: #0b1220; }
 /* Ensure header filter button matches other icon buttons in dark */
 body[data-theme="dark"] .floating-tag-filter-btn {
     background: #111827;
@@ -514,14 +514,16 @@ body[data-theme="dark"] .floating-tag-filter-btn.active:hover {
 /* Normalize icon buttons in light theme header for consistency */
 .data-actions .export-btn,
 .data-actions .import-btn,
-.data-actions .sync-btn {
+.data-actions .sync-btn,
+.data-actions .debug-btn {
     background: #ffffff;
     border: 2px solid #e2e8f0;
     color: #334155;
 }
 .data-actions .export-btn:hover,
 .data-actions .import-btn:hover,
-.data-actions .sync-btn:hover {
+.data-actions .sync-btn:hover,
+.data-actions .debug-btn:hover {
     background: #f8fafc;
     border-color: #cbd5e1;
 }
@@ -529,26 +531,30 @@ body[data-theme="dark"] .floating-tag-filter-btn.active:hover {
 /* Dark theme normalization of icon buttons in header */
 body[data-theme="dark"] .data-actions .export-btn,
 body[data-theme="dark"] .data-actions .import-btn,
-body[data-theme="dark"] .data-actions .sync-btn {
+body[data-theme="dark"] .data-actions .sync-btn,
+body[data-theme="dark"] .data-actions .debug-btn {
     background: #111827;
     border: 2px solid #334155;
     color: #e5e7eb;
 }
 body[data-theme="dark"] .data-actions .export-btn:hover,
 body[data-theme="dark"] .data-actions .import-btn:hover,
-body[data-theme="dark"] .data-actions .sync-btn:hover {
+body[data-theme="dark"] .data-actions .sync-btn:hover,
+body[data-theme="dark"] .data-actions .debug-btn:hover {
     background: #0b1220;
     border-color: #4b5563;
 }
 /* Dark theme icon colors for header actions */
 body[data-theme="dark"] .export-btn svg,
 body[data-theme="dark"] .import-btn svg,
-body[data-theme="dark"] .sync-btn svg {
+body[data-theme="dark"] .sync-btn svg,
+body[data-theme="dark"] .debug-btn svg {
     color: #e5e7eb;
 }
 body[data-theme="dark"] .export-btn:hover svg,
 body[data-theme="dark"] .import-btn:hover svg,
-body[data-theme="dark"] .sync-btn:hover svg {
+body[data-theme="dark"] .sync-btn:hover svg,
+body[data-theme="dark"] .debug-btn:hover svg {
     color: #ffffff;
 }
 body[data-theme="dark"] .floating-tag-filter, body[data-theme="dark"] .floating-tag-grid, body[data-theme="dark"] .floating-priority-grid { background: #0b1220; border-color: #334155; }
@@ -1702,6 +1708,17 @@ body[data-theme="dark"] .edit-note-textarea:focus {
     transition: opacity 0.2s ease;
 }
 
+/* Make actions slightly visible on touch devices even when not hovered */
+@media (hover: none) and (pointer: coarse) {
+    .note-actions {
+        opacity: 0.7; /* Slightly visible but not too prominent */
+    }
+    
+    .note-item:active .note-actions {
+        opacity: 1; /* Full opacity when touched */
+    }
+}
+
 .note-item:hover .note-actions {
     opacity: 1;
 }
@@ -1793,7 +1810,24 @@ body[data-theme="dark"] .edit-note-textarea:focus {
     transform: translateY(-1px);
 }
 
-/* Mobile responsive for notes */
+/* Touch device responsive for notes - always show actions on touch devices */
+@media (hover: none) and (pointer: coarse) {
+    .note-actions {
+        opacity: 1; /* Always show on touch devices */
+    }
+    
+    .note-item {
+        border-left: 3px solid transparent;
+        transition: border-color 0.2s ease;
+    }
+    
+    .note-item:active {
+        border-left-color: #3b82f6; /* Blue accent when touched */
+        background: #f8fafc;
+    }
+}
+
+/* Mobile responsive for notes - fallback for smaller screens */
 @media (max-width: 768px) {
     .note-actions {
         opacity: 1; /* Always show on mobile */
@@ -3460,6 +3494,34 @@ body[data-theme="dark"] .subtask-text { color: #e5e7eb !important; }
 body[data-theme="dark"] .subtask-text.completed { color: #94a3b8; }
 body[data-theme="dark"] .subtask-checkbox { border-color: #475569; }
 
+/* Remove any hover background on sub-task items in dark mode */
+body[data-theme="dark"] .subtask-item:hover {
+    background: transparent !important;
+    background-color: transparent !important;
+    cursor: default !important;
+}
+
+/* Also remove any potential parent hover effects that might affect sub-tasks */
+body[data-theme="dark"] .task-card:hover .subtask-item {
+    background: transparent !important;
+    background-color: transparent !important;
+}
+
+/* Ensure sub-task text doesn't have pointer cursor */
+body[data-theme="dark"] .subtask-item .subtask-text {
+    cursor: default !important;
+}
+
+/* Make sub-task text non-clickable, but allow checkbox and buttons */
+.subtask-item .subtask-text {
+    pointer-events: none;
+}
+
+.subtask-item input[type="checkbox"],
+.subtask-item button {
+    pointer-events: auto;
+}
+
 .subtask-actions {
     display: flex;
     gap: 4px;
@@ -4233,7 +4295,8 @@ body[data-theme="dark"] .subtask-checkbox { border-color: #475569; }
 
 .export-btn,
 .import-btn,
-.sync-btn {
+.sync-btn,
+.debug-btn {
     background: white;
     border: 2px solid #e2e8f0;
     border-radius: 8px;
@@ -4249,7 +4312,8 @@ body[data-theme="dark"] .subtask-checkbox { border-color: #475569; }
 
 .export-btn:hover,
 .import-btn:hover,
-.sync-btn:hover {
+.sync-btn:hover,
+.debug-btn:hover {
     border-color: #667eea;
     background: #f8faff;
     transform: translateY(-1px);
@@ -4257,14 +4321,16 @@ body[data-theme="dark"] .subtask-checkbox { border-color: #475569; }
 
 .export-btn svg,
 .import-btn svg,
-.sync-btn svg {
+.sync-btn svg,
+.debug-btn svg {
     color: #4a5568;
     transition: color 0.3s ease;
 }
 
 .export-btn:hover svg,
 .import-btn:hover svg,
-.sync-btn:hover svg {
+.sync-btn:hover svg,
+.debug-btn:hover svg {
     color: #667eea;
 }
 
@@ -4276,7 +4342,8 @@ body[data-theme="dark"] .subtask-checkbox { border-color: #475569; }
     
     .export-btn,
     .import-btn,
-    .sync-btn {
+    .sync-btn,
+    .debug-btn {
         width: 36px;
         height: 36px;
         padding: 8px;
@@ -4284,7 +4351,8 @@ body[data-theme="dark"] .subtask-checkbox { border-color: #475569; }
     
     .export-btn svg,
     .import-btn svg,
-    .sync-btn svg {
+    .sync-btn svg,
+    .debug-btn svg {
         width: 14px;
         height: 14px;
     }
@@ -4595,4 +4663,116 @@ ark mode styling for add-subtask input to make it clearly visible */
 [data-theme="dark"] .add-subtask button:hover {
     background: #5b21b6 !important;
     border-color: #5b21b6 !important;
+}/* Mob
+ile count badges for bottom navigation */
+.mobile-count-badge {
+    position: absolute;
+    top: 4px;
+    right: 6px;
+    background: var(--primary-color);
+    color: white;
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 10px;
+    min-width: 16px;
+    height: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+/* Hide badge when count is 0 */
+.mobile-count-badge:empty,
+.mobile-count-badge[data-count="0"] {
+    display: none;
+}
+
+/* Ensure mobile segments have relative positioning for badge placement */
+.mobile-segment {
+    position: relative;
+}
+
+/* Dark mode styling for mobile count badges */
+[data-theme="dark"] .mobile-count-badge {
+    background: #6366f1;
+    color: #ffffff;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+/* Active segment badge styling */
+.mobile-segment.active .mobile-count-badge {
+    background: #ffffff;
+    color: var(--primary-color);
+}
+
+[data-theme="dark"] .mobile-segment.active .mobile-count-badge {
+    background: #ffffff;
+    color: #6366f1;
+}/* Not
+es badge styling */
+.notes-btn {
+    position: relative;
+}
+
+.notes-badge {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    background: #ef4444;
+    color: white;
+    font-size: 0.6rem;
+    font-weight: 600;
+    padding: 1px 4px;
+    border-radius: 8px;
+    min-width: 14px;
+    height: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+    z-index: 1;
+}
+
+/* Dark mode styling for notes badge */
+[data-theme="dark"] .notes-badge {
+    background: #f87171;
+    color: #1f2937;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+/* Hover effect for notes button with badge */
+.notes-btn:hover .notes-badge {
+    transform: scale(1.1);
+    transition: transform 0.1s ease;
+}
+
+/* Task title container to stack title and date */
+.task-title-container {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+}
+
+/* Task created date styling */
+.task-created-date {
+    font-size: 0.75rem;
+    color: #6b7280;
+    margin-top: 2px;
+    font-weight: 400;
+}
+
+/* Dark mode styling for task created date */
+[data-theme="dark"] .task-created-date {
+    color: #9ca3af;
+}
+
+/* Responsive styling for task created date */
+@media (max-width: 768px) {
+    .task-created-date {
+        font-size: 0.7rem;
+    }
 }

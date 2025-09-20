@@ -119,17 +119,56 @@ class SyncMigration {
                 'group.com.fynesystems.kanbantodo.last_sync'
             ];
 
+            let cleanedKeys = 0;
+            let failedKeys = 0;
+
             for (const key of keysToRemove) {
                 try {
                     await Preferences.remove({ key });
+                    cleanedKeys++;
+                    console.log(`Cleaned up old key: ${key}`);
                 } catch (error) {
+                    failedKeys++;
                     console.log(`Could not remove old key ${key}:`, error.message);
                 }
             }
 
-            console.log('Old sync data cleanup completed');
+            // Clean up old iCloud sync data if available
+            if (window.iCloudSyncProper) {
+                try {
+                    // Try to clear old iCloud data
+                    await window.iCloudSyncProper.clearAllData();
+                    console.log('Cleaned up old iCloud sync data');
+                } catch (error) {
+                    console.log('Could not clean old iCloud sync data:', error.message);
+                }
+            }
+
+            console.log(`Old sync data cleanup completed: ${cleanedKeys} keys cleaned, ${failedKeys} failed`);
+            
+            // Notify user of cleanup results
+            if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Toast) {
+                const message = `Migration cleanup completed: ${cleanedKeys} old sync entries removed`;
+                window.Capacitor.Plugins.Toast.show({
+                    text: message,
+                    duration: 'short'
+                });
+            }
+
+            return {
+                success: true,
+                cleanedKeys: cleanedKeys,
+                failedKeys: failedKeys,
+                message: `Cleaned up ${cleanedKeys} old sync entries`
+            };
+
         } catch (error) {
             console.error('Error during cleanup:', error);
+            return {
+                success: false,
+                error: error.message,
+                message: 'Cleanup failed: ' + error.message
+            };
         }
     }
 
@@ -162,6 +201,60 @@ class SyncMigration {
         }
 
         return status;
+    }
+
+    // Handle "Fix iCloud Sync" button functionality
+    async fixiCloudSync() {
+        console.log('Starting iCloud sync fix process...');
+        
+        try {
+            // Step 1: Check current status
+            const status = await this.checkMigrationStatus();
+            console.log('Current migration status:', status);
+            
+            if (!status.isCapacitor) {
+                return {
+                    success: false,
+                    message: 'iCloud sync is only available on native platforms'
+                };
+            }
+            
+            if (!status.hasRobustSync) {
+                return {
+                    success: false,
+                    message: 'Robust sync service not available'
+                };
+            }
+            
+            // Step 2: Perform migration
+            const migrationResult = await this.migrateToRobustSync();
+            console.log('Migration result:', migrationResult);
+            
+            if (migrationResult.success) {
+                // Step 3: Clean up old data (optional)
+                const cleanupResult = await this.cleanupOldSyncData();
+                console.log('Cleanup result:', cleanupResult);
+                
+                return {
+                    success: true,
+                    message: 'iCloud sync fix completed successfully',
+                    migration: migrationResult,
+                    cleanup: cleanupResult
+                };
+            } else {
+                return {
+                    success: false,
+                    message: `Migration failed: ${migrationResult.message}`
+                };
+            }
+            
+        } catch (error) {
+            console.error('iCloud sync fix failed:', error);
+            return {
+                success: false,
+                message: `Fix failed: ${error.message}`
+            };
+        }
     }
 }
 

@@ -29,6 +29,13 @@ class RobustDataService {
                 
                 // Setup change listener for external updates
                 window.RobustiCloudSync.addChangeListener(async (cloudData) => {
+                    // Check if we have recent local changes (within last 10 seconds)
+                    const now = Date.now();
+                    if (window.__lastLocalChange && (now - window.__lastLocalChange) < 10000) {
+                        console.log('Skipping iCloud import - recent local changes detected (age:', now - window.__lastLocalChange, 'ms)');
+                        return;
+                    }
+                    
                     // External iCloud change detected, importing
                     await this.importData({ data: cloudData }, { clearExisting: true });
                     this.lastSyncTime = cloudData.lastSync;
@@ -80,13 +87,30 @@ class RobustDataService {
     // Generate conflict-free IDs using device ID + timestamp + counter
     generateUniqueId(type = 'task') {
         const timestamp = Date.now();
-        const devicePrefix = this.deviceId ? this.deviceId.slice(-4) : 'unkn';
+        
+        // Ensure we have a valid device ID
+        if (!this.deviceId) {
+            console.error('Device ID not initialized, generating fallback');
+            this.deviceId = 'fallback-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+        }
+        
+        // Use a more robust device prefix
+        const devicePrefix = this.deviceId.slice(-6).replace(/\D/g, '').padStart(6, '0');
         const counter = type === 'task' ? this.nextTaskId++ : 
                       type === 'note' ? this.nextNoteId++ : 
                       this.nextSubtaskId++;
         
         // Format: timestamp + device + counter (ensures uniqueness across devices)
-        return parseInt(`${timestamp}${devicePrefix.replace(/\D/g, '').padStart(4, '0')}${counter.toString().padStart(3, '0')}`);
+        const uniqueId = parseInt(`${timestamp}${devicePrefix}${counter.toString().padStart(3, '0')}`);
+        
+        console.log(`Generated unique ID for ${type}:`, {
+            deviceId: this.deviceId,
+            devicePrefix: devicePrefix,
+            counter: counter,
+            uniqueId: uniqueId
+        });
+        
+        return uniqueId;
     }
 
     async saveToStorage() {
@@ -95,16 +119,25 @@ class RobustDataService {
             return;
         }
 
+
         this.syncInProgress = true;
 
         try {
             if (this.isCapacitor && window.RobustiCloudSync) {
                 // Use robust iCloud sync
                 const exportData = await this.exportData();
+                console.log('Saving to iCloud - data summary:', {
+                    tasks: exportData.data.tasks?.length || 0,
+                    notes: exportData.data.notes?.length || 0,
+                    deletedNotes: exportData.data.notes?.filter(n => n.deleted)?.length || 0,
+                    subtasks: exportData.data.subtasks?.length || 0
+                });
+                
                 const success = await window.RobustiCloudSync.saveToiCloud(exportData.data);
                 
                 if (success) {
                     this.lastSyncTime = exportData.exported_at;
+                    console.log('Successfully saved to iCloud');
                 } else {
                     console.error('Failed to save to iCloud');
                 }
@@ -139,12 +172,29 @@ class RobustDataService {
                 lastSync: this.lastSyncTime
             };
 
+            console.log('Manual sync check - current lastSync:', this.lastSyncTime);
             const syncResult = await window.RobustiCloudSync.checkForUpdates(currentData);
+            console.log('Sync check result:', {
+                hasUpdates: syncResult.hasUpdates,
+                currentSync: syncResult.currentSync,
+                cloudSync: syncResult.cloudSync
+            });
             
             if (syncResult.hasUpdates) {
+                // Check if we have recent local changes (within last 10 seconds)
+                const now = Date.now();
+                if (window.__lastLocalChange && (now - window.__lastLocalChange) < 10000) {
+                    console.log('Skipping sync import - recent local changes detected (age:', now - window.__lastLocalChange, 'ms)');
+                    return;
+                }
+                
+                console.log('Updates found! Importing data...');
                 await this.importData({ data: syncResult.data }, { clearExisting: true });
                 this.lastSyncTime = syncResult.cloudSync;
+                console.log('Data imported, new lastSync:', this.lastSyncTime);
                 this.notifyChangeListeners();
+            } else {
+                console.log('No updates found');
             }
         } catch (error) {
             console.error('Error during manual sync:', error);
@@ -193,9 +243,7 @@ class RobustDataService {
     }
 
     async updateTask(id, updates) {
-        // Convert id to number for comparison
-        const numericId = parseInt(id, 10);
-        const taskIndex = this.tasks.findIndex(task => task.id === numericId);
+        const taskIndex = this.tasks.findIndex(task => task.id == id);
         if (taskIndex !== -1) {
             this.tasks[taskIndex] = {
                 ...this.tasks[taskIndex],
@@ -210,9 +258,7 @@ class RobustDataService {
     }
 
     async deleteTask(id) {
-        // Convert id to number for comparison
-        const numericId = parseInt(id, 10);
-        const taskIndex = this.tasks.findIndex(task => task.id === numericId);
+        const taskIndex = this.tasks.findIndex(task => task.id == id);
         if (taskIndex !== -1) {
             // Mark as deleted with timestamp instead of removing immediately
             this.tasks[taskIndex] = {
@@ -271,8 +317,7 @@ class RobustDataService {
     }
 
     async updateNote(id, updates) {
-        const numericId = parseInt(id, 10);
-        const noteIndex = this.notes.findIndex(note => note.id === numericId);
+        const noteIndex = this.notes.findIndex(note => note.id == id);
         if (noteIndex !== -1) {
             this.notes[noteIndex] = {
                 ...this.notes[noteIndex],
@@ -286,9 +331,14 @@ class RobustDataService {
     }
 
     async deleteNote(id) {
-        const numericId = parseInt(id, 10);
-        const noteIndex = this.notes.findIndex(note => note.id === numericId);
+        const noteIndex = this.notes.findIndex(note => note.id == id);
         if (noteIndex !== -1) {
+            console.log('Marking note as deleted:', {
+                id: id,
+                noteIndex,
+                currentNote: this.notes[noteIndex]
+            });
+            
             // Mark as deleted with timestamp instead of removing immediately
             this.notes[noteIndex] = {
                 ...this.notes[noteIndex],
@@ -297,12 +347,13 @@ class RobustDataService {
                 updated_at: new Date().toISOString()
             };
             
-            // Note marked as deleted
+            console.log('Note marked as deleted:', this.notes[noteIndex]);
             
             await this.saveToStorage();
             this.notifyChangeListeners();
             return true;
         }
+        console.log('Note not found for deletion:', numericId);
         return false;
     }
 
@@ -323,8 +374,7 @@ class RobustDataService {
     }
 
     async updateSubtask(id, updates) {
-        const numericId = parseInt(id, 10);
-        const subtaskIndex = this.subtasks.findIndex(subtask => subtask.id === numericId);
+        const subtaskIndex = this.subtasks.findIndex(subtask => subtask.id == id);
         if (subtaskIndex !== -1) {
             const updated = {
                 ...this.subtasks[subtaskIndex],
@@ -337,14 +387,16 @@ class RobustDataService {
             this.notifyChangeListeners();
             return updated;
         }
-        console.warn('Subtask not found for update:', { id: numericId });
+        console.warn('Subtask not found for update:', { id: id });
         return null;
     }
 
     async deleteSubtask(id) {
-        const numericId = parseInt(id, 10);
-        const subtaskIndex = this.subtasks.findIndex(subtask => subtask.id === numericId);
+        console.log('deleteSubtask in data service called with:', id);
+        const subtaskIndex = this.subtasks.findIndex(subtask => subtask.id == id);
+        console.log('Found subtask at index:', subtaskIndex, 'for id:', id);
         if (subtaskIndex !== -1) {
+            console.log('Before delete - subtask:', this.subtasks[subtaskIndex]);
             // Mark as deleted with timestamp instead of removing immediately
             this.subtasks[subtaskIndex] = {
                 ...this.subtasks[subtaskIndex],
@@ -352,6 +404,7 @@ class RobustDataService {
                 deleted_at: new Date().toISOString(),
                 updated_at: new Date().toISOString()
             };
+            console.log('After delete - subtask:', this.subtasks[subtaskIndex]);
             
             // Subtask marked as deleted
             
@@ -359,6 +412,7 @@ class RobustDataService {
             this.notifyChangeListeners();
             return true;
         }
+        console.log('Subtask not found for deletion');
         return false;
     }
 
@@ -382,6 +436,15 @@ class RobustDataService {
     }
 
     async importData(importData, options = {}) {
+        console.log('importData called - clearExisting:', options.clearExisting, 'syncDisabled:', window.__syncDisabled, 'lastLocalChange:', window.__lastLocalChange);
+        
+        // Check if we have recent local changes (within last 10 seconds)
+        const now = Date.now();
+        if (window.__lastLocalChange && (now - window.__lastLocalChange) < 10000) {
+            console.log('Skipping importData - recent local changes detected (age:', now - window.__lastLocalChange, 'ms)');
+            return;
+        }
+        
         const { data } = importData;
         const { clearExisting = false } = options;
 
@@ -394,8 +457,10 @@ class RobustDataService {
         };
 
         // Helper to merge items with proper deletion handling
-        const mergeItems = (localItems, incomingItems) => {
+        const mergeItems = (localItems, incomingItems, itemType = 'items') => {
             const itemMap = new Map();
+            
+            console.log(`Merging ${itemType} - Local:`, localItems.length, 'Incoming:', incomingItems.length);
             
             // Add all local items first
             localItems.forEach(item => itemMap.set(item.id, item));
@@ -406,15 +471,24 @@ class RobustDataService {
                 
                 if (!existingItem) {
                     // New item from remote
+                    console.log(`${itemType} - New item from remote:`, incomingItem.id, incomingItem.deleted ? '(DELETED)' : '(ACTIVE)');
                     itemMap.set(incomingItem.id, incomingItem);
                 } else if (isIncomingNewer(existingItem, incomingItem)) {
                     // Incoming item is newer, use it
+                    console.log(`${itemType} - Incoming newer:`, incomingItem.id, 
+                        existingItem.deleted ? 'was DELETED' : 'was ACTIVE', 
+                        '→', 
+                        incomingItem.deleted ? 'now DELETED' : 'now ACTIVE');
                     itemMap.set(incomingItem.id, incomingItem);
+                } else {
+                    console.log(`${itemType} - Keeping existing:`, existingItem.id, existingItem.deleted ? '(DELETED)' : '(ACTIVE)');
                 }
                 // If existing is newer or equal, keep existing (no action needed)
             });
             
-            return Array.from(itemMap.values());
+            const result = Array.from(itemMap.values());
+            console.log(`${itemType} merge result:`, result.length, 'total,', result.filter(i => i.deleted).length, 'deleted');
+            return result;
         };
 
         const incomingTasks = (data.tasks || []).map(t => ({ ...t }));
@@ -422,9 +496,14 @@ class RobustDataService {
         const incomingSubtasks = (data.subtasks || []).map(s => ({ ...s }));
 
         // Use the new merge function that properly handles deletions
-        this.tasks = mergeItems(this.tasks, incomingTasks);
-        this.notes = mergeItems(this.notes, incomingNotes);
-        this.subtasks = mergeItems(this.subtasks, incomingSubtasks);
+        console.log('Before merge - local notes:', this.notes.length, 'deleted:', this.notes.filter(n => n.deleted).length);
+        console.log('Incoming notes:', incomingNotes.length, 'deleted:', incomingNotes.filter(n => n.deleted).length);
+        
+        this.tasks = mergeItems(this.tasks, incomingTasks, 'tasks');
+        this.notes = mergeItems(this.notes, incomingNotes, 'notes');
+        this.subtasks = mergeItems(this.subtasks, incomingSubtasks, 'subtasks');
+        
+        console.log('After merge - total notes:', this.notes.length, 'deleted:', this.notes.filter(n => n.deleted).length);
 
         // Update ID counters
         if (clearExisting) {
@@ -437,9 +516,14 @@ class RobustDataService {
             this.nextSubtaskId = Math.max(this.nextSubtaskId, data.nextSubtaskId || 1);
         }
 
-        // Import completed
-
-        await this.saveToStorage();
+        // Import completed - don't save back to iCloud to avoid race conditions
+        console.log('Import completed - skipping save to avoid overwriting newer data');
+        
+        // Only save to local storage, not iCloud
+        if (!this.isCapacitor) {
+            await this.saveToLocalStorage();
+        }
+        
         this.notifyChangeListeners();
     }
 
@@ -514,7 +598,9 @@ class RobustDataService {
     }
 
     getSubtasks(taskId) {
-        return this.subtasks.filter(subtask => subtask.task_id === taskId && !subtask.deleted);
+        const filtered = this.subtasks.filter(subtask => subtask.task_id === taskId && !subtask.deleted);
+        console.log('getSubtasks for task', taskId, 'found', filtered.length, 'subtasks. All subtasks for this task:', this.subtasks.filter(s => s.task_id === taskId).map(s => ({ id: s.id, deleted: s.deleted, title: s.title })));
+        return filtered;
     }
 
     getNotes() {
@@ -522,24 +608,19 @@ class RobustDataService {
     }
 
     getTaskById(id) {
-        // Convert id to number for comparison since task IDs are stored as numbers
-        const numericId = parseInt(id, 10);
-        return this.tasks.find(task => task.id === numericId && !task.deleted);
+        return this.tasks.find(task => task.id == id && !task.deleted);
     }
 
     getNotesByTaskId(taskId) {
-        const numericId = parseInt(taskId, 10);
-        return this.notes.filter(note => note.task_id === numericId && !note.deleted);
+        return this.notes.filter(note => note.task_id == taskId && !note.deleted);
     }
 
     getSubtasksByTaskId(taskId) {
-        const numericId = parseInt(taskId, 10);
-        return this.subtasks.filter(subtask => subtask.task_id === numericId && !subtask.deleted);
+        return this.subtasks.filter(subtask => subtask.task_id == taskId && !subtask.deleted);
     }
 
     getSubtaskById(id) {
-        const numericId = parseInt(id, 10);
-        const subtask = this.subtasks.find(subtask => subtask.id === numericId);
+        const subtask = this.subtasks.find(subtask => subtask.id == id);
         return (subtask && !subtask.deleted) ? subtask : null;
     }
 
