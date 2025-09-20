@@ -655,9 +655,11 @@ class TodoApp {
         const priorityLabel = this.getPriorityLabel(task.priority || 'medium');
         const isExpanded = this.expandedTasks && this.expandedTasks.has(task.id);
 
-        // Get notes count for this task
+        // Get notes and subtasks count for this task
         const taskNotes = await window.RobustDataService.getNotesByTaskId(task.id);
+        const taskSubtasks = await window.RobustDataService.getSubtasksByTaskId(task.id);
         const notesCount = taskNotes ? taskNotes.length : 0;
+        const subtasksCount = taskSubtasks ? taskSubtasks.length : 0;
 
         // Make URLs clickable and highlight search terms
         let title = this.makeUrlsClickable(task.title);
@@ -689,7 +691,11 @@ class TodoApp {
                 <div class="task-header" onclick="app.toggleTaskExpansion(${task.id})" title="Click to expand/collapse task details">
                     <div class="task-title-container">
                         <div class="task-title">${title}</div>
-                        <div class="task-created-date">${createdDate}</div>
+                        <div class="task-created-date">
+                            ${createdDate}
+                            ${notesCount > 0 ? '<span class="task-indicator notes-indicator" title="Has notes"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path><polyline points="14,2 14,8 20,8"></polyline></svg></span>' : ''}
+                            ${subtasksCount > 0 ? '<span class="task-indicator subtasks-indicator" title="Has subtasks"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9,11 12,14 22,4"></polyline><path d="M21,12v7a2,2 0 0,1-2,2H5a2,2 0 0,1-2-2V5a2,2 0 0,1,2-2h11"></path></svg></span>' : ''}
+                        </div>
                     </div>
                     <div class="task-header-actions" onclick="event.stopPropagation()">
                         <div class="priority-badge priority-${task.priority || 'medium'}" onclick="app.showPriorityDropdown(event, ${task.id}, '${task.priority || 'medium'}')" title="Click to change priority">${priorityLabel}</div>
