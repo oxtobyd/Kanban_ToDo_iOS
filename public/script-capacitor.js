@@ -494,6 +494,8 @@ class TodoApp {
     }
 
     handleSearch(searchTerm) {
+        console.log('Search triggered with term:', searchTerm);
+        
         // Clear existing timeout
         if (this.searchTimeout) {
             clearTimeout(this.searchTimeout);
@@ -502,6 +504,7 @@ class TodoApp {
         // Debounce search
         this.searchTimeout = setTimeout(() => {
             this.currentSearch = searchTerm.trim();
+            console.log('Executing search with term:', this.currentSearch);
             this.loadTasks();
         }, 300);
     }
