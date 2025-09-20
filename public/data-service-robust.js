@@ -282,7 +282,7 @@ class RobustDataService {
             
             // Also mark related notes and subtasks as deleted
             this.notes.forEach((note, index) => {
-                if (note.task_id === numericId) {
+                if (note.task_id == id) {
                     this.notes[index] = {
                         ...note,
                         deleted: true,
@@ -293,7 +293,7 @@ class RobustDataService {
             });
             
             this.subtasks.forEach((subtask, index) => {
-                if (subtask.task_id === numericId) {
+                if (subtask.task_id == id) {
                     this.subtasks[index] = {
                         ...subtask,
                         deleted: true,
@@ -602,6 +602,42 @@ class RobustDataService {
             filteredTasks = filteredTasks.filter(task => 
                 !filters.excludeTags.some(tag => task.tags && task.tags.includes(tag))
             );
+        }
+        
+        // Apply sorting
+        const sortBy = filters.sortBy || 'created_at';
+        if (sortBy === 'priority') {
+            const priorityOrder = { urgent: 1, high: 2, medium: 3, low: 4 };
+            filteredTasks.sort((a, b) => {
+                const aPriority = priorityOrder[a.priority] || 3;
+                const bPriority = priorityOrder[b.priority] || 3;
+                if (aPriority !== bPriority) {
+                    return aPriority - bPriority;
+                }
+                // Secondary sort by due date if available, otherwise created date
+                const aDate = a.due_date ? new Date(a.due_date) : new Date(a.created_at);
+                const bDate = b.due_date ? new Date(b.due_date) : new Date(b.created_at);
+                return aDate - bDate;
+            });
+        } else if (sortBy === 'due_date') {
+            filteredTasks.sort((a, b) => {
+                // Tasks with due dates first, then by due date
+                const aHasDue = !!a.due_date;
+                const bHasDue = !!b.due_date;
+                if (aHasDue !== bHasDue) {
+                    return bHasDue - aHasDue; // Due dates first
+                }
+                if (aHasDue && bHasDue) {
+                    return new Date(a.due_date) - new Date(b.due_date);
+                }
+                // If no due dates, sort by created date
+                return new Date(b.created_at) - new Date(a.created_at);
+            });
+        } else if (sortBy === 'title') {
+            filteredTasks.sort((a, b) => a.title.localeCompare(b.title));
+        } else {
+            // Default sort by created date
+            filteredTasks.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
         }
         
         return filteredTasks;

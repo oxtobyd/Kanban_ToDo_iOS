@@ -650,16 +650,48 @@ class TodoApp {
     }
 
     async createTaskHTML(task) {
-        const createdDate = new Date(task.created_at).toLocaleDateString();
-        const priorityClass = `priority-${task.priority || 'medium'}`;
-        const priorityLabel = this.getPriorityLabel(task.priority || 'medium');
-        const isExpanded = this.expandedTasks && this.expandedTasks.has(task.id);
+        try {
+            // Show due date if available, otherwise show created date
+            const displayDate = task.due_date ? 
+                new Date(task.due_date).toLocaleDateString() : 
+                new Date(task.created_at).toLocaleDateString();
+            const priorityClass = `priority-${task.priority || 'medium'}`;
+            const priorityLabel = this.getPriorityLabel(task.priority || 'medium');
+            const isExpanded = this.expandedTasks && this.expandedTasks.has(task.id);
 
-        // Get notes and subtasks count for this task
-        const taskNotes = await window.RobustDataService.getNotesByTaskId(task.id);
-        const taskSubtasks = await window.RobustDataService.getSubtasksByTaskId(task.id);
-        const notesCount = taskNotes ? taskNotes.length : 0;
-        const subtasksCount = taskSubtasks ? taskSubtasks.length : 0;
+            // Get notes and subtasks count for this task
+            let notesCount = 0;
+            let subtasksCount = 0;
+            try {
+                const taskNotes = await window.RobustDataService.getNotesByTaskId(task.id);
+                const taskSubtasks = await window.RobustDataService.getSubtasksByTaskId(task.id);
+                notesCount = taskNotes ? taskNotes.length : 0;
+                subtasksCount = taskSubtasks ? taskSubtasks.length : 0;
+            } catch (error) {
+                console.error('Error getting notes/subtasks for task:', task.id, error);
+                // Continue with 0 counts if there's an error
+            }
+
+        // Calculate due date status and days remaining
+        let dueDateStatus = null;
+        let daysRemaining = null;
+        if (task.due_date) {
+            const today = new Date();
+            const dueDate = new Date(task.due_date);
+            const diffTime = dueDate - today;
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            
+            if (diffDays < 0) {
+                dueDateStatus = { type: 'overdue', days: Math.abs(diffDays) };
+                daysRemaining = { text: `-${Math.abs(diffDays)}`, color: 'red' };
+            } else if (diffDays === 0) {
+                dueDateStatus = { type: 'today', days: 0 };
+                daysRemaining = { text: '0', color: 'orange' };
+            } else {
+                dueDateStatus = { type: 'soon', days: diffDays };
+                daysRemaining = { text: `+${diffDays}`, color: 'green' };
+            }
+        }
 
         // Make URLs clickable and highlight search terms
         let title = this.makeUrlsClickable(task.title);
@@ -692,7 +724,10 @@ class TodoApp {
                     <div class="task-title-container">
                         <div class="task-title">${title}</div>
                         <div class="task-created-date">
-                            ${createdDate}
+                            ${task.due_date ? 
+                                `<span class="due-date-display"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="clock-icon"><circle cx="12" cy="12" r="10"></circle><polyline points="12,6 12,12 16,14"></polyline></svg>${displayDate}${daysRemaining ? ` <span class="days-remaining days-remaining-${daysRemaining.color}">(${daysRemaining.text})</span>` : ''}</span>` : 
+                                `<span class="created-date-display">${displayDate}</span>`
+                            }
                             ${notesCount > 0 ? '<span class="task-indicator notes-indicator" title="Has notes"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path><polyline points="14,2 14,8 20,8"></polyline></svg></span>' : ''}
                             ${subtasksCount > 0 ? '<span class="task-indicator subtasks-indicator" title="Has subtasks"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9,11 12,14 22,4"></polyline><path d="M21,12v7a2,2 0 0,1-2,2H5a2,2 0 0,1-2-2V5a2,2 0 0,1,2-2h11"></path></svg></span>' : ''}
                         </div>
@@ -707,7 +742,12 @@ class TodoApp {
                 <div>${pendingReasonHTML}</div>
                 ${subtasksHTML}
                 <div class="task-meta">
-                    <span>${createdDate}</span>
+                    <span>Created: ${new Date(task.created_at).toLocaleDateString()}</span>
+                    ${dueDateStatus ? `<span class="due-date-indicator ${dueDateStatus.type}">
+                        ${dueDateStatus.type === 'overdue' ? `⚠️ ${dueDateStatus.days} days overdue` : 
+                          dueDateStatus.type === 'today' ? '📅 Due today' : 
+                          `⏰ Due in ${dueDateStatus.days} days`}
+                    </span>` : ''}
                     <div class="task-actions">
                         <button class="notes-btn" onclick="app.openNotesModal(${task.id})" title="Notes">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -737,6 +777,20 @@ class TodoApp {
                 </div>
             </div>
         `;
+        } catch (error) {
+            console.error('Error creating task HTML for task:', task.id, error);
+            // Return a basic task card if there's an error
+            return `
+                <div class="task-card priority-medium" data-task-id="${task.id}">
+                    <div class="task-header">
+                        <div class="task-title-container">
+                            <div class="task-title">${task.title || 'Error loading task'}</div>
+                            <div class="task-created-date">Error</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
     }
 
     async renderSubtasks(taskId) {
@@ -1187,6 +1241,43 @@ class TodoApp {
         document.addEventListener('selectstart', (e) => {
             if (this.isDragging) e.preventDefault();
         });
+
+        // Fix dropdown focus issues for all select elements
+        const fixDropdown = (selectElement) => {
+            if (!selectElement) return;
+            
+            // Prevent event propagation that might interfere with dropdown
+            selectElement.addEventListener('mousedown', (e) => {
+                e.stopPropagation();
+            });
+            selectElement.addEventListener('click', (e) => {
+                e.stopPropagation();
+            });
+            selectElement.addEventListener('focus', (e) => {
+                e.stopPropagation();
+            });
+            selectElement.addEventListener('blur', (e) => {
+                e.stopPropagation();
+            });
+            
+            // Reset dropdown state on each click to prevent it getting stuck
+            selectElement.addEventListener('click', (e) => {
+                // Blur and refocus to reset the dropdown state
+                setTimeout(() => {
+                    selectElement.blur();
+                    setTimeout(() => {
+                        selectElement.focus();
+                    }, 10);
+                }, 10);
+            });
+        };
+
+        // Apply fix to all dropdowns
+        fixDropdown(document.getElementById('sortBy'));
+        fixDropdown(document.getElementById('taskPriority'));
+        fixDropdown(document.getElementById('taskStatus'));
+        fixDropdown(document.getElementById('mobilePriority'));
+        fixDropdown(document.getElementById('mobileTag'));
     }
 
     updateDragAndDropForScreenSize() {
@@ -1692,6 +1783,7 @@ class TodoApp {
             document.getElementById('taskPriority').value = task.priority || 'medium';
             document.getElementById('taskStatus').value = task.status || 'todo';
             document.getElementById('pendingReason').value = task.pending_on || '';
+            document.getElementById('taskDueDate').value = task.due_date || '';
             this.currentTaskTags = task.tags || [];
             this.togglePendingReason(task.status);
         } else {
@@ -1767,6 +1859,7 @@ class TodoApp {
         const priority = document.getElementById('taskPriority').value;
         const status = document.getElementById('taskStatus').value;
         const pendingReason = document.getElementById('pendingReason').value.trim();
+        const dueDate = document.getElementById('taskDueDate').value;
         const tags = this.currentTaskTags;
 
         if (!title) return;
@@ -1782,7 +1875,8 @@ class TodoApp {
             priority,
             status,
             tags,
-            pending_on: status === 'pending' ? pendingReason : null
+            pending_on: status === 'pending' ? pendingReason : null,
+            due_date: dueDate || null
         };
 
         try {
@@ -1856,7 +1950,7 @@ class TodoApp {
         console.log('Delete task called for ID:', taskId); // Debug log
 
         // Show confirmation dialog
-        const confirmed = await this.showDeleteConfirmation();
+        const confirmed = await this.showDeleteConfirmation('Delete Task?', 'This action cannot be undone. You can use the undo option if you change your mind.');
         if (!confirmed) {
             console.log('Delete cancelled by user');
             return;
@@ -2410,49 +2504,64 @@ class TodoApp {
         const noteContent = document.getElementById(`note-content-${noteId}`);
         const currentText = noteContent.textContent;
 
-        const textarea = document.createElement('textarea');
-        textarea.value = currentText;
-        textarea.className = 'edit-note-textarea';
-        textarea.rows = 3;
+        // Create edit note modal
+        const modal = document.createElement('div');
+        modal.className = 'modal';
+        modal.id = 'editNoteModal';
+        modal.style.display = 'block';
+        modal.innerHTML = `
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Edit Note</h3>
+                    <button class="close-btn" onclick="app.closeEditNoteModal()">&times;</button>
+                </div>
+                <div class="form-group">
+                    <textarea id="editNoteText" rows="6" placeholder="Enter note content...">${this.escapeHtml(currentText)}</textarea>
+                </div>
+                <div class="form-actions">
+                    <button type="button" onclick="app.closeEditNoteModal()">Cancel</button>
+                    <button type="button" onclick="app.saveEditNote(${noteId})">Save</button>
+                </div>
+            </div>
+        `;
 
-        const saveBtn = document.createElement('button');
-        saveBtn.textContent = 'Save';
-        saveBtn.className = 'save-note-btn';
-
-        const cancelBtn = document.createElement('button');
-        cancelBtn.textContent = 'Cancel';
-        cancelBtn.className = 'cancel-note-btn';
-
-        const actions = document.createElement('div');
-        actions.className = 'edit-note-actions';
-        actions.appendChild(saveBtn);
-        actions.appendChild(cancelBtn);
-
-        noteContent.innerHTML = '';
-        noteContent.appendChild(textarea);
-        noteContent.appendChild(actions);
-
-        textarea.focus();
-
-        saveBtn.onclick = async () => {
-            const newContent = textarea.value.trim();
-            if (newContent) {
-                try {
-                    await window.RobustDataService.updateNote(noteId, { content: newContent });
-                    await this.loadNotes(this.currentTaskId);
-                } catch (error) {
-                    console.error('Error updating note:', error);
-                }
+        document.body.appendChild(modal);
+        
+        // Focus the textarea
+        setTimeout(() => {
+            const textarea = document.getElementById('editNoteText');
+            if (textarea) {
+                textarea.focus();
+                textarea.select();
             }
-        };
+        }, 100);
+    }
 
-        cancelBtn.onclick = () => {
-            noteContent.textContent = currentText;
-        };
+    closeEditNoteModal() {
+        const modal = document.getElementById('editNoteModal');
+        if (modal) {
+            modal.remove();
+        }
+    }
+
+    async saveEditNote(noteId) {
+        const textarea = document.getElementById('editNoteText');
+        const newContent = textarea.value.trim();
+        
+        if (newContent) {
+            try {
+                await window.RobustDataService.updateNote(noteId, { content: newContent });
+                await this.loadNotes(this.currentTaskId);
+                this.closeEditNoteModal();
+            } catch (error) {
+                console.error('Error updating note:', error);
+            }
+        }
     }
 
     async deleteNote(noteId) {
-        if (!confirm('Are you sure you want to delete this note?')) return;
+        const confirmed = await this.showDeleteConfirmation('Delete Note?', 'This note will be permanently deleted.');
+        if (!confirmed) return;
 
         try {
             console.log('Deleting note:', noteId);
@@ -2543,7 +2652,8 @@ class TodoApp {
 
     async deleteSubtask(subtaskId) {
         console.log('deleteSubtask called with:', subtaskId);
-        if (!confirm('Are you sure you want to delete this subtask?')) return;
+        const confirmed = await this.showDeleteConfirmation('Delete Subtask?', 'This subtask will be permanently deleted.');
+        if (!confirmed) return;
 
         // Track local change timestamp to prevent sync override
         window.__lastLocalChange = Date.now();
@@ -2600,76 +2710,6 @@ class TodoApp {
         }
     }
 
-    async loadNotes(taskId) {
-        try {
-            const notes = await window.RobustDataService.getNotesByTaskId(taskId);
-            this.renderNotes(notes);
-        } catch (error) {
-            console.error('Error loading notes:', error);
-        }
-    }
-
-    renderNotes(notes) {
-        const notesList = document.getElementById('notesList');
-        notesList.innerHTML = notes.map(note => `
-            <div class="note-item" data-note-id="${note.id}">
-                <div class="note-content" id="note-content-${note.id}">${this.makeUrlsClickable(note.content)}</div>
-                <div class="note-meta">
-                    <span class="note-date">${new Date(note.created_at).toLocaleString()}</span>
-                    <div class="note-actions">
-                        <button class="note-edit-btn" onclick="app.editNote(${note.id}, '${this.escapeHtml(note.content).replace(/'/g, "\\'")}')">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                                <path d="m18.5 2.5 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                            </svg>
-                        </button>
-                        <button class="note-delete-btn" onclick="app.deleteNote(${note.id})">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <polyline points="3,6 5,6 21,6"></polyline>
-                                <path d="m19,6v14a2,2 0 0,1-2,2H7a2,2 0 0,1-2-2V6m3,0V4a2,2 0 0,1,2-2h4a2,2 0 0,1,2,2v2"></path>
-                            </svg>
-                        </button>
-                    </div>
-                </div>
-            </div>
-        `).join('');
-    }
-
-    async addNote() {
-        const content = document.getElementById('newNote').value.trim();
-        if (!content || !this.currentTaskId) return;
-
-        try {
-            await window.RobustDataService.addNote({ task_id: this.currentTaskId, content: content });
-            document.getElementById('newNote').value = '';
-            await this.loadNotes(this.currentTaskId);
-        } catch (error) {
-            console.error('Error adding note:', error);
-        }
-    }
-
-    async editNote(noteId, currentContent) {
-        const newContent = prompt('Edit note:', currentContent);
-        if (newContent === null || newContent.trim() === currentContent) return;
-
-        try {
-            await window.RobustDataService.updateNote(noteId, { content: newContent.trim() });
-            await this.loadNotes(this.currentTaskId);
-        } catch (error) {
-            console.error('Error updating note:', error);
-        }
-    }
-
-    async deleteNote(noteId) {
-        if (!confirm('Delete this note?')) return;
-
-        try {
-            await window.RobustDataService.deleteNote(noteId);
-            await this.loadNotes(this.currentTaskId);
-        } catch (error) {
-            console.error('Error deleting note:', error);
-        }
-    }
 
     // Subtask methods
     toggleSubtasksVisibility(taskId, event) {
@@ -3125,7 +3165,7 @@ class TodoApp {
         }, 4000);
     }
 
-    showDeleteConfirmation() {
+    showDeleteConfirmation(title = 'Delete Task?', message = 'This action cannot be undone. You can use the undo option if you change your mind.') {
         return new Promise((resolve) => {
             // Create modal overlay
             const overlay = document.createElement('div');
@@ -3160,8 +3200,8 @@ class TodoApp {
             modal.innerHTML = `
                 <div style="text-align: center; margin-bottom: 24px;">
                     <div style="font-size: 48px; margin-bottom: 16px;">🗑️</div>
-                    <h3 style="margin: 0 0 8px 0; font-size: 18px; font-weight: 600;">Delete Task?</h3>
-                    <p style="margin: 0; color: #6b7280; font-size: 14px;">This action cannot be undone. You can use the undo option if you change your mind.</p>
+                    <h3 style="margin: 0 0 8px 0; font-size: 18px; font-weight: 600;">${title}</h3>
+                    <p style="margin: 0; color: #6b7280; font-size: 14px;">${message}</p>
                 </div>
                 <div style="display: flex; gap: 12px; justify-content: center;">
                     <button id="cancelDelete" style="

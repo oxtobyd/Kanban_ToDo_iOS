@@ -682,6 +682,28 @@ body[data-theme="dark"] .stat-value { color: #e5e7eb; }
 body[data-theme="dark"] .option-card { background: rgba(15, 23, 42, 0.9); border-color: #334155; }
 body[data-theme="dark"] .checkbox-label { color: #cbd5e1; }
 
+/* Print modal checkboxes in dark mode */
+body[data-theme="dark"] .option-card input[type="checkbox"] {
+    background: #1e293b;
+    border-color: #475569;
+}
+
+body[data-theme="dark"] .option-card input[type="checkbox"]:checked {
+    background: #818cf8;
+    border-color: #818cf8;
+}
+
+body[data-theme="dark"] .option-card input[type="checkbox"]:checked::after {
+    color: white;
+}
+
+body[data-theme="dark"] .option-card input[type="checkbox"]:hover {
+    border-color: #818cf8;
+}
+
+body[data-theme="dark"] .option-title { color: #f8fafc; }
+body[data-theme="dark"] .option-sub { color: #94a3b8; }
+
 /* Notes modal */
 body[data-theme="dark"] .note-item { background: rgba(148, 163, 184, 0.08); border-left-color: #6366f1; }
 body[data-theme="dark"] .note-content { color: #e2e8f0; }
@@ -689,6 +711,130 @@ body[data-theme="dark"] .note-date { color: #94a3b8; }
 body[data-theme="dark"] .note-edit-textarea { background: #0f172a; border-color: #4f46e5; color: #e5e7eb; }
 body[data-theme="dark"] .note-save-btn { background: #4f46e5; }
 body[data-theme="dark"] .note-cancel-btn { background: #1f2937; color: #e5e7eb; }
+
+/* Dark mode note action buttons */
+body[data-theme="dark"] .note-edit-btn {
+    color: #34d399;
+    background: transparent !important;
+    border: none !important;
+}
+
+body[data-theme="dark"] .note-edit-btn:hover {
+    background: rgba(52, 211, 153, 0.15) !important;
+    color: #10b981;
+}
+
+body[data-theme="dark"] .note-edit-btn:active {
+    background: rgba(52, 211, 153, 0.2) !important;
+}
+
+body[data-theme="dark"] .note-delete-btn {
+    color: #f87171;
+    background: transparent !important;
+    border: none !important;
+}
+
+body[data-theme="dark"] .note-delete-btn:hover {
+    background: rgba(248, 113, 113, 0.15) !important;
+    color: #ef4444;
+}
+
+body[data-theme="dark"] .note-delete-btn:active {
+    background: rgba(248, 113, 113, 0.2) !important;
+}
+
+/* Dark mode note item hover */
+body[data-theme="dark"] .note-item:hover {
+    background: rgba(148, 163, 184, 0.12);
+}
+
+/* Additional dark mode button overrides */
+body[data-theme="dark"] .note-edit-btn,
+body[data-theme="dark"] .note-delete-btn {
+    background-color: transparent !important;
+    background-image: none !important;
+    box-shadow: none !important;
+    border: none !important;
+    outline: none !important;
+}
+
+body[data-theme="dark"] .note-edit-btn:focus,
+body[data-theme="dark"] .note-delete-btn:focus {
+    background-color: transparent !important;
+    box-shadow: none !important;
+    outline: none !important;
+}
+
+body[data-theme="dark"] .note-edit-btn:focus-visible,
+body[data-theme="dark"] .note-delete-btn:focus-visible {
+    outline: 2px solid #34d399 !important;
+    outline-offset: 2px !important;
+}
+
+/* Force remove any white backgrounds in dark mode */
+body[data-theme="dark"] .note-actions button {
+    background: transparent !important;
+    background-color: transparent !important;
+    background-image: none !important;
+    border: none !important;
+    box-shadow: none !important;
+    color: inherit !important;
+}
+
+body[data-theme="dark"] .note-actions button:hover {
+    background: rgba(52, 211, 153, 0.15) !important;
+    background-color: rgba(52, 211, 153, 0.15) !important;
+    background-image: none !important;
+}
+
+body[data-theme="dark"] .note-actions button:active {
+    background: rgba(52, 211, 153, 0.2) !important;
+    background-color: rgba(52, 211, 153, 0.2) !important;
+    background-image: none !important;
+}
+
+/* Target the delete button specifically */
+body[data-theme="dark"] .note-delete-btn:hover {
+    background: rgba(248, 113, 113, 0.15) !important;
+    background-color: rgba(248, 113, 113, 0.15) !important;
+    background-image: none !important;
+}
+
+body[data-theme="dark"] .note-delete-btn:active {
+    background: rgba(248, 113, 113, 0.2) !important;
+    background-color: rgba(248, 113, 113, 0.2) !important;
+    background-image: none !important;
+}
+
+/* Nuclear option - reset all button styling in dark mode for note actions */
+body[data-theme="dark"] .note-actions button,
+body[data-theme="dark"] .note-actions button:before,
+body[data-theme="dark"] .note-actions button:after {
+    all: unset !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 4px !important;
+    border-radius: 4px !important;
+    cursor: pointer !important;
+    transition: all 0.2s ease !important;
+    background: transparent !important;
+    background-color: transparent !important;
+    background-image: none !important;
+    border: none !important;
+    box-shadow: none !important;
+    outline: none !important;
+}
+
+body[data-theme="dark"] .note-actions button:hover {
+    background: rgba(52, 211, 153, 0.15) !important;
+    background-color: rgba(52, 211, 153, 0.15) !important;
+}
+
+body[data-theme="dark"] .note-delete-btn:hover {
+    background: rgba(248, 113, 113, 0.15) !important;
+    background-color: rgba(248, 113, 113, 0.15) !important;
+}
 
 /* Pending reason modal */
 body[data-theme="dark"] #pendingReasonInput { background: #0f172a; color: #e5e7eb; border-color: #334155; }
@@ -860,11 +1006,26 @@ body[data-theme="dark"] .category-tab.active { background: #4f46e5; border-color
     cursor: pointer;
     transition: border-color 0.3s;
     min-width: 120px;
+    position: relative;
+    z-index: 10;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
 }
 
 .filters select:focus {
     outline: none;
     border-color: #667eea;
+    z-index: 11;
+}
+
+.filters select:hover {
+    border-color: #cbd5e1;
+}
+
+.filters select:active {
+    border-color: #667eea;
+    z-index: 11;
 }
 
 .header-logo {
@@ -1582,6 +1743,11 @@ body[data-theme="dark"] .category-tab.active { background: #4f46e5; border-color
     font-size: 1rem;
     transition: border-color 0.3s;
     background: white;
+    position: relative;
+    z-index: 10;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
 }
 
 .form-group input:focus,
@@ -1589,6 +1755,16 @@ body[data-theme="dark"] .category-tab.active { background: #4f46e5; border-color
 .form-group select:focus {
     outline: none;
     border-color: #667eea;
+    z-index: 11;
+}
+
+.form-group select:hover {
+    border-color: #cbd5e1;
+}
+
+.form-group select:active {
+    border-color: #667eea;
+    z-index: 11;
 }
 
 .form-actions {
@@ -1740,6 +1916,13 @@ body[data-theme="dark"] .edit-note-textarea:focus {
     display: flex;
     align-items: center;
     justify-content: center;
+}
+
+/* Ensure buttons have no default styling */
+.note-edit-btn:focus,
+.note-delete-btn:focus {
+    outline: none;
+    box-shadow: none;
 }
 
 .note-edit-btn {
@@ -2364,6 +2547,11 @@ body[data-theme="dark"] .edit-note-textarea:focus {
         font-size: 16px;
         background: #f8fafc;
         transition: all 0.2s ease;
+        position: relative;
+        z-index: 10;
+        -webkit-appearance: none;
+        -moz-appearance: none;
+        appearance: none;
     }
     
     .mo-filters select:focus {
@@ -2371,6 +2559,16 @@ body[data-theme="dark"] .edit-note-textarea:focus {
         border-color: #667eea;
         background: white;
         box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        z-index: 11;
+    }
+    
+    .mo-filters select:hover {
+        border-color: #cbd5e1;
+    }
+    
+    .mo-filters select:active {
+        border-color: #667eea;
+        z-index: 11;
     }
     
     .mo-actions {
@@ -3876,8 +4074,37 @@ body[data-theme="dark"] .subtask-item .subtask-text {
 .option-card input[type="checkbox"] {
     width: 18px;
     height: 18px;
-    accent-color: #667eea;
+    cursor: pointer;
+    border: 2px solid #cbd5e1;
+    border-radius: 4px;
+    background: white;
+    transition: all 0.2s ease;
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    position: relative;
 }
+
+.option-card input[type="checkbox"]:checked {
+    background: #667eea;
+    border-color: #667eea;
+}
+
+.option-card input[type="checkbox"]:checked::after {
+    content: '✓';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: white;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.option-card input[type="checkbox"]:hover {
+    border-color: #667eea;
+}
+
 .option-title { font-weight: 600; color: #0f172a; }
 .option-sub { color: #64748b; font-size: 0.85rem; }
 
@@ -4774,6 +5001,41 @@ es badge styling */
     gap: 4px;
 }
 
+/* Due date display with clock icon */
+.due-date-display {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: #6b7280;
+    font-size: 0.75rem;
+}
+
+.due-date-display .clock-icon {
+    width: 10px;
+    height: 10px;
+    color: #6b7280;
+}
+
+/* Created date display (no icon) */
+.created-date-display {
+    color: #6b7280;
+    font-size: 0.75rem;
+}
+
+/* Dark mode due date display */
+[data-theme="dark"] .due-date-display {
+    color: #9ca3af;
+}
+
+[data-theme="dark"] .due-date-display .clock-icon {
+    color: #9ca3af;
+}
+
+/* Dark mode created date display */
+[data-theme="dark"] .created-date-display {
+    color: #9ca3af;
+}
+
 /* Task indicators styling */
 .task-indicator {
     opacity: 0.7;
@@ -4800,9 +5062,113 @@ es badge styling */
     color: #10b981;
 }
 
+/* Dark mode task indicators */
+[data-theme="dark"] .notes-indicator {
+    color: #60a5fa;
+}
+
+[data-theme="dark"] .subtasks-indicator {
+    color: #34d399;
+}
+
+/* Edit note modal styling */
+#editNoteModal .modal-content {
+    max-width: 500px;
+    width: 90%;
+}
+
+#editNoteModal textarea {
+    min-height: 120px;
+    resize: vertical;
+    font-family: inherit;
+}
+
+#editNoteModal .form-actions {
+    justify-content: flex-end;
+    gap: 12px;
+}
+
+#editNoteModal .form-actions button {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+#editNoteModal .form-actions button:first-child {
+    background: #f3f4f6;
+    color: #374151;
+}
+
+#editNoteModal .form-actions button:first-child:hover {
+    background: #e5e7eb;
+}
+
+#editNoteModal .form-actions button:last-child {
+    background: #667eea;
+    color: white;
+}
+
+#editNoteModal .form-actions button:last-child:hover {
+    background: #5b6ee0;
+}
+
+/* Dark mode edit note modal */
+[data-theme="dark"] #editNoteModal .form-actions button:first-child {
+    background: #374151;
+    color: #e5e7eb;
+}
+
+[data-theme="dark"] #editNoteModal .form-actions button:first-child:hover {
+    background: #4b5563;
+}
+
+[data-theme="dark"] #editNoteModal .form-actions button:last-child {
+    background: #818cf8;
+}
+
+[data-theme="dark"] #editNoteModal .form-actions button:last-child:hover {
+    background: #7c3aed;
+}
+
 /* Dark mode styling for task created date */
 [data-theme="dark"] .task-created-date {
     color: #9ca3af;
+}
+
+/* Days remaining indicator styling */
+.days-remaining {
+    font-size: 0.7rem;
+    font-weight: 600;
+    margin-left: 4px;
+    font-family: monospace;
+}
+
+.days-remaining-green {
+    color: #10b981;
+}
+
+.days-remaining-orange {
+    color: #f59e0b;
+}
+
+.days-remaining-red {
+    color: #ef4444;
+}
+
+/* Dark mode days remaining */
+[data-theme="dark"] .days-remaining-green {
+    color: #34d399;
+}
+
+[data-theme="dark"] .days-remaining-orange {
+    color: #fbbf24;
+}
+
+[data-theme="dark"] .days-remaining-red {
+    color: #f87171;
 }
 
 /* Dark mode styling for task indicators */
@@ -4814,9 +5180,60 @@ es badge styling */
     color: #34d399;
 }
 
+/* Due date indicators */
+.due-date-indicator {
+    font-size: 0.75rem;
+    padding: 2px 6px;
+    border-radius: 4px;
+    margin-left: 8px;
+    font-weight: 500;
+}
+
+.due-date-indicator.overdue {
+    background-color: #fee2e2;
+    color: #dc2626;
+    border: 1px solid #fecaca;
+}
+
+.due-date-indicator.today {
+    background-color: #fef3c7;
+    color: #d97706;
+    border: 1px solid #fed7aa;
+}
+
+.due-date-indicator.soon {
+    background-color: #dbeafe;
+    color: #2563eb;
+    border: 1px solid #bfdbfe;
+}
+
+/* Dark mode due date indicators */
+[data-theme="dark"] .due-date-indicator.overdue {
+    background-color: #7f1d1d;
+    color: #fca5a5;
+    border-color: #991b1b;
+}
+
+[data-theme="dark"] .due-date-indicator.today {
+    background-color: #78350f;
+    color: #fbbf24;
+    border-color: #92400e;
+}
+
+[data-theme="dark"] .due-date-indicator.soon {
+    background-color: #1e3a8a;
+    color: #93c5fd;
+    border-color: #1e40af;
+}
+
 /* Responsive styling for task created date */
 @media (max-width: 768px) {
     .task-created-date {
         font-size: 0.7rem;
+    }
+    
+    .due-date-indicator {
+        font-size: 0.7rem;
+        padding: 1px 4px;
     }
 }
