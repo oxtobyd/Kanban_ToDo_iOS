@@ -2470,13 +2470,6 @@ class TodoApp {
     async toggleSubtask(subtaskId, checked) {
         console.log('toggleSubtask called with:', { subtaskId, checked });
         
-        // Check if the checkbox state matches what we expect
-        const checkbox = document.getElementById(`subtask-checkbox-${subtaskId}`);
-        if (checkbox && checkbox.checked === checked) {
-            console.log('Checkbox state already matches, skipping toggle');
-            return;
-        }
-        
         // Prevent multiple rapid calls to the same subtask
         const key = `toggle_${subtaskId}`;
         if (window.__toggleInProgress && window.__toggleInProgress[key]) {

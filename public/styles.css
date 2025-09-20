@@ -474,6 +474,12 @@ body[data-theme="dark"] .task-card.priority-urgent .subtasks-list .subtask-title
 body[data-theme="dark"] .task-card.priority-high .subtasks-list .subtask-title,
 body[data-theme="dark"] .task-card.priority-medium .subtasks-list .subtask-title,
 body[data-theme="dark"] .task-card.priority-low .subtasks-list .subtask-title { color: #e5e7eb !important; }
+
+/* Ensure completed subtasks show strike-through in dark mode */
+body[data-theme="dark"] .task-card .subtask-item.completed .subtask-title {
+    text-decoration: line-through !important;
+    color: #94a3b8 !important;
+}
 body[data-theme="dark"] .task-actions .notes-btn { color: #93c5fd; }
 body[data-theme="dark"] .task-actions .edit-btn { color: #34d399; }
 body[data-theme="dark"] .task-actions .delete-btn { color: #f87171; }
@@ -4195,8 +4201,8 @@ body[data-theme="dark"] .subtask-item .subtask-text {
 }
 
 .subtask-item.completed .subtask-title {
-    text-decoration: line-through;
-    color: #9ca3af;
+    text-decoration: line-through !important;
+    color: #9ca3af !important;
 }
 
 .subtask-item input[type="checkbox"] {

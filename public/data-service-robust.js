@@ -29,6 +29,12 @@ class RobustDataService {
                 
                 // Setup change listener for external updates
                 window.RobustiCloudSync.addChangeListener(async (cloudData) => {
+                    // Check if sync is disabled for local changes
+                    if (window.__syncDisabled) {
+                        console.log('Skipping iCloud import - sync disabled for local changes');
+                        return;
+                    }
+                    
                     // Check if we have recent local changes (within last 10 seconds)
                     const now = Date.now();
                     if (window.__lastLocalChange && (now - window.__lastLocalChange) < 10000) {
@@ -160,6 +166,12 @@ class RobustDataService {
 
     async manualSync() {
         if (!this.isCapacitor || !window.RobustiCloudSync) {
+            return;
+        }
+        
+        // Check if sync is disabled for local changes
+        if (window.__syncDisabled) {
+            console.log('Skipping manual sync - sync disabled for local changes');
             return;
         }
         
@@ -304,8 +316,8 @@ class RobustDataService {
     async addNote(note) {
         const newNote = {
             ...note,
-            // Ensure task_id is numeric
-            task_id: note.task_id != null ? parseInt(note.task_id, 10) : note.task_id,
+            // Keep task_id as-is (no parseInt needed for large IDs)
+            task_id: note.task_id,
             id: this.generateUniqueId('note'),
             created_at: new Date().toISOString()
         };
@@ -361,8 +373,8 @@ class RobustDataService {
     async addSubtask(subtask) {
         const newSubtask = {
             ...subtask,
-            // Ensure task_id is numeric
-            task_id: subtask.task_id != null ? parseInt(subtask.task_id, 10) : subtask.task_id,
+            // Keep task_id as-is (no parseInt needed for large IDs)
+            task_id: subtask.task_id,
             id: this.generateUniqueId('subtask'),
             created_at: new Date().toISOString()
         };
@@ -374,13 +386,16 @@ class RobustDataService {
     }
 
     async updateSubtask(id, updates) {
+        console.log('updateSubtask called with:', { id, updates });
         const subtaskIndex = this.subtasks.findIndex(subtask => subtask.id == id);
+        console.log('Found subtask at index:', subtaskIndex, 'for id:', id);
         if (subtaskIndex !== -1) {
             const updated = {
                 ...this.subtasks[subtaskIndex],
                 ...updates,
                 updated_at: new Date().toISOString()
             };
+            console.log('Updating subtask from:', this.subtasks[subtaskIndex], 'to:', updated);
             this.subtasks[subtaskIndex] = updated;
             // Subtask updated
             await this.saveToStorage();
@@ -437,6 +452,12 @@ class RobustDataService {
 
     async importData(importData, options = {}) {
         console.log('importData called - clearExisting:', options.clearExisting, 'syncDisabled:', window.__syncDisabled, 'lastLocalChange:', window.__lastLocalChange);
+        
+        // Check if sync is disabled for local changes
+        if (window.__syncDisabled) {
+            console.log('Skipping importData - sync disabled for local changes');
+            return;
+        }
         
         // Check if we have recent local changes (within last 10 seconds)
         const now = Date.now();
