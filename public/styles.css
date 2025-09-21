@@ -3179,6 +3179,13 @@ ags Styles */
     border-radius: 2px;
 }
 
+/* Dark mode search highlighting - better contrast */
+body[data-theme="dark"] .search-highlight {
+    background: #fbbf24;
+    color: #1f2937;
+    font-weight: 600;
+}
+
 /* Active filters indicator */
 .filter-active {
     border-color: #667eea !important;

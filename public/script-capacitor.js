@@ -324,7 +324,7 @@ class TodoApp {
 
     async loadTasks(priority = null, sortBy = null, search = null, includeTags = null, excludeTags = null, forceRefresh = false) {
         try {
-            // Check if user is actively typing in an input field
+            // Check if user is actively typing in an input field (but allow search input)
             const activeElement = document.activeElement;
             const isTypingInInput = activeElement && (
                 activeElement.tagName === 'INPUT' ||
@@ -333,7 +333,9 @@ class TodoApp {
             );
 
             // If user is typing and this isn't a forced refresh, skip the refresh
-            if (isTypingInInput && !forceRefresh) {
+            // BUT allow search input to trigger updates
+            const isSearchInput = activeElement && activeElement.id === 'searchInput';
+            if (isTypingInInput && !forceRefresh && !isSearchInput) {
                 return;
             }
 
@@ -355,7 +357,9 @@ class TodoApp {
                 excludeTags: this.currentExcludeTags
             };
 
+            console.log('loadTasks filters:', filters);
             this.tasks = await window.RobustDataService.getTasks(filters);
+            console.log('Tasks returned:', this.tasks.length);
             this.renderTasks();
             await this.buildCategoryTabs();
             this.updateFilterButtonIndicator();
@@ -391,9 +395,19 @@ class TodoApp {
         const container = document.getElementById('categoryTabs');
         if (!container) return;
 
-        // Build from ALL known tags and ALL tasks (so counts don't change with filtering)
+        // Build from ALL known tags but use current filters for counts
         const allTags = await window.RobustDataService.getTags();
-        const allTasks = await window.RobustDataService.getTasks({});
+        
+        // Apply current filters (search, priority, etc.) but not category filters
+        const currentFilters = {
+            priority: this.currentPriority || undefined,
+            sortBy: this.currentSortBy,
+            search: this.currentSearch || undefined,
+            includeTags: undefined, // Don't filter by category for tab counts
+            excludeTags: this.currentExcludeTags
+        };
+        
+        const filteredTasks = await window.RobustDataService.getTasks(currentFilters);
         const categories = (Array.isArray(allTags) ? allTags : [])
             .filter(t => typeof t === 'string' && t.startsWith('@'))
             .sort((a, b) => a.localeCompare(b));
@@ -407,19 +421,19 @@ class TodoApp {
         container.innerHTML = '';
         container.style.display = 'flex';
 
-        // Always include All with TOTAL count (not filtered)
+        // Always include All with FILTERED count (respects search, priority, etc.)
         const allBtn = document.createElement('button');
         allBtn.className = 'category-tab' + (this.currentCategoryTag === null ? ' active' : '');
-        allBtn.textContent = `All (${allTasks.length})`;
+        allBtn.textContent = `All (${filteredTasks.length})`;
         allBtn.type = 'button';
         allBtn.onclick = () => this.setCategory(null);
         container.appendChild(allBtn);
 
-        // Render each category with TOTAL counts
+        // Render each category with FILTERED counts (respects search, priority, etc.)
         categories.forEach(tag => {
             const btn = document.createElement('button');
             btn.className = 'category-tab' + ((this.currentCategoryTag === tag) ? ' active' : '');
-            const count = allTasks.reduce((acc, t) => acc + (Array.isArray(t.tags) && t.tags.includes(tag) ? 1 : 0), 0);
+            const count = filteredTasks.reduce((acc, t) => acc + (Array.isArray(t.tags) && t.tags.includes(tag) ? 1 : 0), 0);
             btn.textContent = `${tag.replace(/^@/, '')} (${count})`;
             btn.type = 'button';
             btn.onclick = () => this.setCategory(tag);
@@ -494,7 +508,7 @@ class TodoApp {
     }
 
     handleSearch(searchTerm) {
-        console.log('Search triggered with term:', searchTerm);
+        console.log('Search triggered:', searchTerm, 'Current category:', this.currentCategoryTag);
         
         // Clear existing timeout
         if (this.searchTimeout) {
@@ -504,7 +518,7 @@ class TodoApp {
         // Debounce search
         this.searchTimeout = setTimeout(() => {
             this.currentSearch = searchTerm.trim();
-            console.log('Executing search with term:', this.currentSearch);
+            console.log('Executing search:', this.currentSearch, 'Category:', this.currentCategoryTag);
             this.loadTasks();
         }, 300);
     }
@@ -528,11 +542,13 @@ class TodoApp {
     }
 
     async renderTasks() {
+        console.log('renderTasks called with', this.tasks.length, 'tasks');
         const columns = ['todo', 'in_progress', 'pending', 'done'];
 
         for (const status of columns) {
             const list = document.getElementById(`${status}-list`);
             const tasks = this.tasks.filter(task => task.status === status);
+            console.log(`Status ${status}: ${tasks.length} tasks`);
 
             const taskHTMLPromises = tasks.map(task => this.createTaskHTML(task));
             const taskHTMLs = await Promise.all(taskHTMLPromises);

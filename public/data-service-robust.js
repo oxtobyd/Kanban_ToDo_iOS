@@ -586,13 +586,12 @@ class RobustDataService {
         
         if (filters.search) {
             const searchTerm = filters.search.toLowerCase();
-            console.log('Filtering tasks by search term:', searchTerm);
-            const beforeCount = filteredTasks.length;
+            console.log('Applying search filter:', searchTerm, 'Before:', filteredTasks.length);
             filteredTasks = filteredTasks.filter(task => 
                 task.title.toLowerCase().includes(searchTerm) ||
                 task.description.toLowerCase().includes(searchTerm)
             );
-            console.log(`Search filter: ${beforeCount} -> ${filteredTasks.length} tasks`);
+            console.log('After search filter:', filteredTasks.length);
         }
         
         if (filters.includeTags && filters.includeTags.length > 0) {
