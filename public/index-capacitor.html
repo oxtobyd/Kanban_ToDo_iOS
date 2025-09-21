@@ -113,6 +113,12 @@
                         </svg>
                         <span class="sync-status-indicator" id="syncStatusIndicator"></span>
                     </button>
+                    <button class="help-btn" onclick="app.openHelpModal()" title="Help & Guide">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+                            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+                        </svg>
+                    </button>
                 </div>
                 <button class="add-task-btn" onclick="app.openTaskModal()" title="Add Task">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -273,6 +279,7 @@
             <button class="ma-item" onclick="app.manualSync()">Sync Now</button>
             <button class="ma-item" onclick="app.exportData()">Export Data</button>
             <button class="ma-item" onclick="app.openImportModal()">Import Data</button>
+            <button class="ma-item" onclick="app.openHelpModal()">Help & Guide</button>
             <button class="ma-item ma-cancel" onclick="app.closeMobileActions()">Cancel</button>
         </div>
     </div>
@@ -600,6 +607,19 @@
             </div>
             <div class="floating-tag-actions">
                 <button onclick="app.clearAllFilters()" class="clear-filters-btn">Clear All</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Help Modal -->
+    <div class="modal" id="helpModal" role="dialog" aria-modal="true" aria-labelledby="helpModalTitle" style="display: none;">
+        <div class="modal-content help-modal-content">
+            <div class="modal-header">
+                <h3 id="helpModalTitle">Help & User Guide</h3>
+                <button class="close-btn" aria-label="Close" onclick="app.closeHelpModal()">&times;</button>
+            </div>
+            <div class="help-content" id="helpContent">
+                <!-- Help content will be populated by JavaScript -->
             </div>
         </div>
     </div>

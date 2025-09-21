@@ -451,20 +451,27 @@ class RobustDataService {
     }
 
     async importData(importData, options = {}) {
-        console.log('importData called - clearExisting:', options.clearExisting, 'syncDisabled:', window.__syncDisabled, 'lastLocalChange:', window.__lastLocalChange);
-        
-        // Check if sync is disabled for local changes
-        if (window.__syncDisabled) {
-            console.log('Skipping importData - sync disabled for local changes');
-            return;
-        }
-        
-        // Check if we have recent local changes (within last 10 seconds)
-        const now = Date.now();
-        if (window.__lastLocalChange && (now - window.__lastLocalChange) < 10000) {
-            console.log('Skipping importData - recent local changes detected (age:', now - window.__lastLocalChange, 'ms)');
-            return;
-        }
+        try {
+            console.log('importData called - clearExisting:', options.clearExisting, 'syncDisabled:', window.__syncDisabled, 'lastLocalChange:', window.__lastLocalChange);
+            
+            // Check if sync is disabled for local changes
+            if (window.__syncDisabled) {
+                console.log('Skipping importData - sync disabled for local changes');
+                return {
+                    success: false,
+                    message: 'Import skipped - sync disabled for local changes'
+                };
+            }
+            
+            // Check if we have recent local changes (within last 10 seconds)
+            const now = Date.now();
+            if (window.__lastLocalChange && (now - window.__lastLocalChange) < 10000) {
+                console.log('Skipping importData - recent local changes detected (age:', now - window.__lastLocalChange, 'ms)');
+                return {
+                    success: false,
+                    message: 'Import skipped - recent local changes detected'
+                };
+            }
         
         const { data } = importData;
         const { clearExisting = false } = options;
@@ -546,6 +553,30 @@ class RobustDataService {
         }
         
         this.notifyChangeListeners();
+        
+        // Return success result
+        return {
+            success: true,
+            message: 'Data imported successfully',
+            stats: {
+                tasks: { imported: incomingTasks.length, errors: 0 },
+                notes: { imported: incomingNotes.length, errors: 0 },
+                subtasks: { imported: incomingSubtasks.length, errors: 0 }
+            }
+        };
+        
+        } catch (error) {
+            console.error('Import error:', error);
+            return {
+                success: false,
+                message: 'Import failed: ' + (error.message || 'Unknown error'),
+                stats: {
+                    tasks: { imported: 0, errors: 1 },
+                    notes: { imported: 0, errors: 1 },
+                    subtasks: { imported: 0, errors: 1 }
+                }
+            };
+        }
     }
 
     // Change listeners
@@ -586,12 +617,10 @@ class RobustDataService {
         
         if (filters.search) {
             const searchTerm = filters.search.toLowerCase();
-            console.log('Applying search filter:', searchTerm, 'Before:', filteredTasks.length);
             filteredTasks = filteredTasks.filter(task => 
                 task.title.toLowerCase().includes(searchTerm) ||
                 task.description.toLowerCase().includes(searchTerm)
             );
-            console.log('After search filter:', filteredTasks.length);
         }
         
         if (filters.includeTags && filters.includeTags.length > 0) {

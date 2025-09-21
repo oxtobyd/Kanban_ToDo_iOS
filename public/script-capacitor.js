@@ -357,9 +357,7 @@ class TodoApp {
                 excludeTags: this.currentExcludeTags
             };
 
-            console.log('loadTasks filters:', filters);
             this.tasks = await window.RobustDataService.getTasks(filters);
-            console.log('Tasks returned:', this.tasks.length);
             this.renderTasks();
             await this.buildCategoryTabs();
             this.updateFilterButtonIndicator();
@@ -508,8 +506,6 @@ class TodoApp {
     }
 
     handleSearch(searchTerm) {
-        console.log('Search triggered:', searchTerm, 'Current category:', this.currentCategoryTag);
-        
         // Clear existing timeout
         if (this.searchTimeout) {
             clearTimeout(this.searchTimeout);
@@ -518,7 +514,6 @@ class TodoApp {
         // Debounce search
         this.searchTimeout = setTimeout(() => {
             this.currentSearch = searchTerm.trim();
-            console.log('Executing search:', this.currentSearch, 'Category:', this.currentCategoryTag);
             this.loadTasks();
         }, 300);
     }
@@ -542,13 +537,11 @@ class TodoApp {
     }
 
     async renderTasks() {
-        console.log('renderTasks called with', this.tasks.length, 'tasks');
         const columns = ['todo', 'in_progress', 'pending', 'done'];
 
         for (const status of columns) {
             const list = document.getElementById(`${status}-list`);
             const tasks = this.tasks.filter(task => task.status === status);
-            console.log(`Status ${status}: ${tasks.length} tasks`);
 
             const taskHTMLPromises = tasks.map(task => this.createTaskHTML(task));
             const taskHTMLs = await Promise.all(taskHTMLPromises);
@@ -3065,10 +3058,13 @@ class TodoApp {
             // Reload tasks
             await this.loadTasks();
 
-            // Close modal after a delay
+            // Show success toast notification
+            this.showNotification('Import completed successfully!', 'success');
+
+            // Close modal after a short delay to show success message
             setTimeout(() => {
                 this.closeImportModal();
-            }, 3000);
+            }, 2000);
 
         } catch (error) {
             console.error('Import error:', error);
@@ -3921,6 +3917,154 @@ class TodoApp {
 
         // Save current position before closing
         this.saveFloatingFilterPosition();
+    }
+
+    openHelpModal() {
+        const modal = document.getElementById('helpModal');
+        if (modal) {
+            modal.style.display = 'block';
+            this.populateHelpContent();
+        }
+    }
+
+    closeHelpModal() {
+        const modal = document.getElementById('helpModal');
+        if (modal) {
+            modal.style.display = 'none';
+        }
+    }
+
+    populateHelpContent() {
+        const helpContent = document.getElementById('helpContent');
+        if (!helpContent) return;
+
+        helpContent.innerHTML = `
+            <div class="help-section">
+                <h4>📋 Getting Started</h4>
+                <p>Welcome to Todo Kanban! This app helps you organize tasks using a Kanban board with four columns:</p>
+                <ul>
+                    <li><strong>To Do</strong> - Tasks not started yet</li>
+                    <li><strong>In Progress</strong> - Currently being worked on</li>
+                    <li><strong>Pending</strong> - Blocked or waiting for something</li>
+                    <li><strong>Done</strong> - Completed tasks</li>
+                </ul>
+            </div>
+
+            <div class="help-section">
+                <h4>➕ Creating Tasks</h4>
+                <p><strong>Desktop:</strong> Click the "+" button in the header</p>
+                <p><strong>Mobile:</strong> Tap the floating "+" button or use the menu</p>
+                <p>Fill in the task details:</p>
+                <ul>
+                    <li><strong>Title</strong> - Brief description of the task</li>
+                    <li><strong>Description</strong> - Detailed information (optional)</li>
+                    <li><strong>Priority</strong> - Urgent, High, Medium, or Low</li>
+                    <li><strong>Status</strong> - Which column to start in</li>
+                    <li><strong>Due Date</strong> - When the task should be completed (optional)</li>
+                    <li><strong>Tags</strong> - Add labels for organization (optional)</li>
+                </ul>
+                <p><strong>Pending Tasks:</strong> When you move a task to "Pending" status, you'll be prompted to enter a reason why it's pending (optional). This reason is then displayed in the task card to help you remember what's blocking it.</p>
+            </div>
+
+            <div class="help-section">
+                <h4>🏷️ Tags & Categories</h4>
+                <p>Tags help organize your tasks:</p>
+                <ul>
+                    <li><strong>Regular Tags:</strong> Add any label (e.g., "meeting", "urgent")</li>
+                    <li><strong>Categories:</strong> Tags starting with "@" create categories (e.g., "@work", "@personal")</li>
+                    <li><strong>Category Tabs:</strong> Click category tabs to filter tasks</li>
+                    <li><strong>Tag Filter:</strong> Use the filter button to include/exclude specific tags</li>
+                </ul>
+            </div>
+
+            <div class="help-section">
+                <h4>🔍 Search & Filter</h4>
+                <p>Find tasks quickly:</p>
+                <ul>
+                    <li><strong>Search:</strong> Type in the search box to find tasks by title or description</li>
+                    <li><strong>Sort:</strong> Sort by created date, due date, priority, or title</li>
+                    <li><strong>Priority Filter:</strong> Show only tasks with specific priority</li>
+                    <li><strong>Tag Filter:</strong> Include or exclude tasks with specific tags</li>
+                </ul>
+            </div>
+
+            <div class="help-section">
+                <h4>📝 Notes & Subtasks</h4>
+                <p>Add detailed information to tasks:</p>
+                <ul>
+                    <li><strong>Notes:</strong> Click the notes button to add multiple notes to a task</li>
+                    <li><strong>Subtasks:</strong> Break down large tasks into smaller steps</li>
+                </ul>
+            </div>
+
+            <div class="help-section">
+                <h4>📱 Mobile Features</h4>
+                <p>Optimized for mobile devices:</p>
+                <ul>
+                    <li><strong>Touch Gestures:</strong> Swipe between columns on mobile</li>
+                    <li><strong>Drag & Drop:</strong> Drag tasks between columns on larger displays</li>
+                    <li><strong>Column Navigation:</strong> Easy buttons to jump between columns on mobile</li>
+                    <li><strong>Long Press:</strong> Hold to start dragging tasks</li>
+                    <li><strong>Mobile Menu:</strong> Tap the three dots for actions</li>
+                    <li><strong>Search Overlay:</strong> Tap the search icon for mobile search</li>
+                </ul>
+            </div>
+
+            <div class="help-section">
+                <h4>☁️ iCloud Sync</h4>
+                <p>Your data syncs automatically across all your Apple devices:</p>
+                <ul>
+                    <li><strong>Automatic Sync:</strong> Changes sync automatically via iCloud</li>
+                    <li><strong>Manual Sync:</strong> Tap "Sync Now" to force immediate sync</li>
+                    <li><strong>Cross-Device:</strong> Changes appear on all devices within minutes</li>
+                    <li><strong>Offline Support:</strong> Works offline, syncs when connected</li>
+                </ul>
+            </div>
+
+            <div class="help-section">
+                <h4>💾 Import & Export</h4>
+                <p>Backup and restore your data:</p>
+                <ul>
+                    <li><strong>Export:</strong> Download your data as a JSON file</li>
+                    <li><strong>Import:</strong> Upload a JSON file to restore data</li>
+                    <li><strong>Backup:</strong> Regular exports ensure you never lose data</li>
+                </ul>
+            </div>
+
+            <div class="help-section">
+                <h4>🖨️ Print & Share</h4>
+                <p>Share your tasks:</p>
+                <ul>
+                    <li><strong>Print:</strong> Generate a printable version of your board</li>
+                    <li><strong>Select Columns:</strong> Choose which columns to include</li>
+                    <li><strong>Compact View:</strong> Fit more tasks per page</li>
+                </ul>
+            </div>
+
+            <div class="help-section">
+                <h4>🎨 Themes & Customization</h4>
+                <p>Personalize your experience:</p>
+                <ul>
+                    <li><strong>Light/Dark Mode:</strong> Toggle between themes</li>
+                    <li><strong>Responsive Design:</strong> Adapts to your screen size</li>
+                    <li><strong>Accessibility:</strong> Screen reader friendly</li>
+                </ul>
+            </div>
+
+
+            <div class="help-section">
+                <h4>❓ Troubleshooting</h4>
+                <p>Common issues and solutions:</p>
+                <ul>
+                    <li><strong>Sync Issues:</strong> Try manual sync or restart the app</li>
+                    <li><strong>Missing Data:</strong> Check iCloud settings and internet connection</li>
+                </ul>
+            </div>
+
+            <div class="help-footer">
+                <p><strong>Need more help?</strong> Check the app's built-in features or contact support.</p>
+            </div>
+        `;
     }
 
     minimizeFloatingTagFilter() {
