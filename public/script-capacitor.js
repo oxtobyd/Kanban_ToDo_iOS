@@ -667,15 +667,15 @@ class TodoApp {
             const displayDate = task.due_date ? 
                 new Date(task.due_date).toLocaleDateString() : 
                 new Date(task.created_at).toLocaleDateString();
-            const priorityClass = `priority-${task.priority || 'medium'}`;
-            const priorityLabel = this.getPriorityLabel(task.priority || 'medium');
-            const isExpanded = this.expandedTasks && this.expandedTasks.has(task.id);
+        const priorityClass = `priority-${task.priority || 'medium'}`;
+        const priorityLabel = this.getPriorityLabel(task.priority || 'medium');
+        const isExpanded = this.expandedTasks && this.expandedTasks.has(task.id);
 
             // Get notes and subtasks count for this task
             let notesCount = 0;
             let subtasksCount = 0;
             try {
-                const taskNotes = await window.RobustDataService.getNotesByTaskId(task.id);
+        const taskNotes = await window.RobustDataService.getNotesByTaskId(task.id);
                 const taskSubtasks = await window.RobustDataService.getSubtasksByTaskId(task.id);
                 notesCount = taskNotes ? taskNotes.length : 0;
                 subtasksCount = taskSubtasks ? taskSubtasks.length : 0;
@@ -798,10 +798,10 @@ class TodoApp {
                         <div class="task-title-container">
                             <div class="task-title">${task.title || 'Error loading task'}</div>
                             <div class="task-created-date">Error</div>
-                        </div>
                     </div>
                 </div>
-            `;
+            </div>
+        `;
         }
     }
 
@@ -812,13 +812,17 @@ class TodoApp {
             const completedCount = subtasks.filter(st => st.completed).length;
             const totalCount = subtasks.length;
 
+            // Check if subtasks should be expanded based on our state tracking
+            const isExpanded = this.expandedTasks.has(`subtasks-${taskId}`);
+            console.log(`Rendering subtasks for task ${taskId}, isExpanded: ${isExpanded}, expandedTasks:`, Array.from(this.expandedTasks));
+            
             return `
                 <div class="subtasks-section">
                     <div class="subtasks-header" onclick="app.toggleSubtasksVisibility(${taskId}, event)" title="Click to expand/collapse subtasks">
                         <span class="subtasks-progress">${totalCount > 0 ? `${completedCount}/${totalCount} subtasks` : 'Sub-tasks'}</span>
-                        <span class="subtasks-toggle-indicator" id="toggle-indicator-${taskId}">▼</span>
+                        <span class="subtasks-toggle-indicator" id="toggle-indicator-${taskId}">${isExpanded ? '▲' : '▼'}</span>
                     </div>
-                    <div class="subtasks-list" id="subtasks-${taskId}" style="display: block;">
+                    <div class="subtasks-list ${isExpanded ? 'expanded' : ''}" id="subtasks-${taskId}">
                         ${subtasks.map(subtask => `
                             <div class="subtask-item ${subtask.completed ? 'completed' : ''}" id="subtask-item-${subtask.id}">
                                 <input id="subtask-checkbox-${subtask.id}" data-subtask-id="${subtask.id}" type="checkbox" ${subtask.completed ? 'checked' : ''} 
@@ -1359,7 +1363,7 @@ class TodoApp {
             const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
 
             // Mark as moved if distance is significant
-            if (distance > 5) {
+            if (distance > 15) {
                 this.hasMoved = true;
             }
 
@@ -1372,7 +1376,7 @@ class TodoApp {
                 );
 
                 // If held and moved, enter drag mode (only when drag-and-drop is enabled for screen size)
-                if (this.isDragAndDropEnabled() && timeHeld > 300 && distanceMoved > 10) {
+                if (this.isDragAndDropEnabled() && timeHeld > 800 && distanceMoved > 30) {
                     e.preventDefault();
                     this.enterDragMode(taskCard, e.touches[0]);
                     return;
@@ -1411,7 +1415,7 @@ class TodoApp {
             // Check for tap-and-hold without movement (alternative drag activation)
             if (this.isDragAndDropEnabled() && this.initialTouch && !this.hasMoved && !this.isSwiping) {
                 const timeHeld = Date.now() - this.initialTouch.time;
-                if (timeHeld > 800) { // 800ms hold without movement
+                if (timeHeld > 1200) { // 1200ms hold without movement
                     this.enterDragMode(taskCard, e.changedTouches[0]);
                     return;
                 }
@@ -2543,7 +2547,7 @@ class TodoApp {
         setTimeout(() => {
             const textarea = document.getElementById('editNoteText');
             if (textarea) {
-                textarea.focus();
+        textarea.focus();
                 textarea.select();
             }
         }, 100);
@@ -2558,17 +2562,17 @@ class TodoApp {
 
     async saveEditNote(noteId) {
         const textarea = document.getElementById('editNoteText');
-        const newContent = textarea.value.trim();
+            const newContent = textarea.value.trim();
         
-        if (newContent) {
-            try {
-                await window.RobustDataService.updateNote(noteId, { content: newContent });
-                await this.loadNotes(this.currentTaskId);
+            if (newContent) {
+                try {
+                    await window.RobustDataService.updateNote(noteId, { content: newContent });
+                    await this.loadNotes(this.currentTaskId);
                 this.closeEditNoteModal();
-            } catch (error) {
-                console.error('Error updating note:', error);
+                } catch (error) {
+                    console.error('Error updating note:', error);
+                }
             }
-        }
     }
 
     async deleteNote(noteId) {
@@ -2729,6 +2733,8 @@ class TodoApp {
             event.stopPropagation(); // Prevent task expansion/collapse
         }
 
+        console.log(`toggleSubtasksVisibility called for task ${taskId}, current expandedTasks:`, Array.from(this.expandedTasks));
+
         const subtasksList = document.getElementById(`subtasks-${taskId}`);
         const toggleIndicator = document.getElementById(`toggle-indicator-${taskId}`);
 
@@ -2737,25 +2743,27 @@ class TodoApp {
             return;
         }
 
-        // Get computed style to handle cases where display might be set by CSS
-        const computedStyle = window.getComputedStyle(subtasksList);
-        const currentDisplay = computedStyle.display;
-        const isCurrentlyHidden = currentDisplay === 'none' || subtasksList.style.display === 'none';
+        // Check if subtasks are currently expanded based on CSS class
+        const isCurrentlyHidden = !subtasksList.classList.contains('expanded');
 
         // Toggling subtasks visibility
 
         if (isCurrentlyHidden) {
-            subtasksList.style.display = 'block';
-            subtasksList.style.visibility = 'visible';
-            subtasksList.style.opacity = '1';
+            // Expand subtasks
             subtasksList.classList.add('expanded');
             if (toggleIndicator) toggleIndicator.textContent = '▲';
+            
+            // Remember the expanded state
+            this.expandedTasks.add(`subtasks-${taskId}`);
+            console.log(`Added subtasks-${taskId} to expandedTasks, now:`, Array.from(this.expandedTasks));
         } else {
-            subtasksList.style.display = 'none';
-            subtasksList.style.visibility = 'hidden';
-            subtasksList.style.opacity = '0';
+            // Collapse subtasks
             subtasksList.classList.remove('expanded');
             if (toggleIndicator) toggleIndicator.textContent = '▼';
+            
+            // Remove from expanded state
+            this.expandedTasks.delete(`subtasks-${taskId}`);
+            console.log(`Removed subtasks-${taskId} from expandedTasks, now:`, Array.from(this.expandedTasks));
         }
     }
 
@@ -2807,6 +2815,27 @@ class TodoApp {
     async exportData() {
         // Close mobile actions menu first
         this.closeMobileActions();
+        
+        // Show export options modal
+        this.openExportOptionsModal();
+    }
+
+    openExportOptionsModal() {
+        const modal = document.getElementById('exportOptionsModal');
+        if (modal) {
+            modal.style.display = 'block';
+        }
+    }
+
+    closeExportOptionsModal() {
+        const modal = document.getElementById('exportOptionsModal');
+        if (modal) {
+            modal.style.display = 'none';
+        }
+    }
+
+    async exportToJSON() {
+        this.closeExportOptionsModal();
         
         try {
             const exportData = await window.RobustDataService.exportData();
@@ -2882,6 +2911,166 @@ class TodoApp {
         }
     }
 
+    async exportToCSV() {
+        this.closeExportOptionsModal();
+        
+        try {
+            const exportData = await window.RobustDataService.exportData();
+            const csvData = this.convertToCSV(exportData);
+
+            // For Capacitor, we'll use the Filesystem API to save the file
+            if (window.Capacitor && window.Capacitor.Plugins.Filesystem) {
+                const { Filesystem, Share, App } = window.Capacitor.Plugins;
+
+                const fileName = `kanban-export-${new Date().toISOString().split('T')[0]}.csv`;
+                const data = csvData;
+
+                const isMac = /Macintosh/.test(navigator.userAgent);
+
+                try {
+                    // Write file to Documents (iOS and Mac)
+                    await Filesystem.writeFile({
+                        path: fileName,
+                        data: data,
+                        directory: 'DOCUMENTS',
+                        encoding: 'utf8',
+                        recursive: true
+                    });
+
+                    // Try to share the file
+                    try {
+                        const { uri } = await Filesystem.getUri({
+                            path: fileName,
+                            directory: 'DOCUMENTS'
+                        });
+
+                        if (Share && Share.share) {
+                            await Share.share({
+                                title: 'Kanban Export',
+                                text: 'Exported Kanban data',
+                                url: uri,
+                                dialogTitle: 'Share Kanban Export'
+                            });
+                            this.showNotification(`CSV exported and shared successfully!`, 'success');
+                            return;
+                        }
+
+                        if (App && App.openUrl) {
+                            await App.openUrl({ url: uri });
+                            this.showNotification(`Opening ${fileName}...`, 'success');
+                            return;
+                        }
+                        if (isMac) {
+                            try { window.open(uri, '_blank'); return; } catch (_) { }
+                        }
+                    } catch (resolveErr) {
+                        console.error('[CSV Export] getUri/openUrl failed, fallback to download:', resolveErr);
+                        this.downloadCSVFile(csvData, fileName);
+                    }
+                    this.showNotification(`CSV exported. You can also find it in Documents/${fileName}`, 'success');
+                } catch (error) {
+                    console.error('[CSV Export] Error during write/share:', error);
+                    try { this.showNotification('CSV Export failed: ' + (error?.message || JSON.stringify(error) || 'Unknown'), 'error'); } catch (_) { }
+                    // Fallback to download
+                    this.downloadCSVFile(csvData, fileName);
+                }
+            } else {
+                // Fallback to browser download
+                const fileName = `kanban-export-${new Date().toISOString().split('T')[0]}.csv`;
+                this.downloadCSVFile(csvData, fileName);
+            }
+        } catch (error) {
+            console.error('CSV Export error:', error);
+            this.showNotification('Failed to export CSV: ' + error.message, 'error');
+        }
+    }
+
+    convertToCSV(exportData) {
+        const tasks = exportData.data.tasks || [];
+        const notes = exportData.data.notes || [];
+        const subtasks = exportData.data.subtasks || [];
+
+        // Create CSV header
+        const headers = [
+            'ID',
+            'Title', 
+            'Description',
+            'Status',
+            'Priority',
+            'Created Date',
+            'Due Date',
+            'Tags',
+            'Notes',
+            'Subtasks',
+            'Pending Reason'
+        ];
+
+        // Convert tasks to CSV rows
+        const rows = tasks.map(task => {
+            // Get notes for this task
+            const taskNotes = notes
+                .filter(note => note.task_id == task.id && !note.deleted)
+                .map(note => note.content)
+                .join(' | ');
+
+            // Get subtasks for this task
+            const taskSubtasks = subtasks
+                .filter(subtask => subtask.task_id == task.id && !subtask.deleted)
+                .map(subtask => subtask.completed ? `[✓] ${subtask.title}` : subtask.title)
+                .join(' | ');
+
+            // Format tags
+            const tags = Array.isArray(task.tags) ? task.tags.join(', ') : (task.tags || '');
+
+            // Format dates
+            const createdDate = task.created_at ? new Date(task.created_at).toLocaleDateString() : '';
+            const dueDate = task.due_date ? new Date(task.due_date).toLocaleDateString() : '';
+
+            return [
+                task.id,
+                this.escapeCSV(task.title || ''),
+                this.escapeCSV(task.description || ''),
+                task.status || '',
+                task.priority || '',
+                createdDate,
+                dueDate,
+                this.escapeCSV(tags),
+                this.escapeCSV(taskNotes),
+                this.escapeCSV(taskSubtasks),
+                this.escapeCSV(task.pending_reason || '')
+            ];
+        });
+
+        // Combine headers and rows
+        const csvContent = [headers, ...rows]
+            .map(row => row.map(field => `"${field}"`).join(','))
+            .join('\n');
+
+        return csvContent;
+    }
+
+    escapeCSV(field) {
+        if (typeof field !== 'string') return '';
+        // Escape quotes and wrap in quotes if contains comma, quote, or newline
+        return field.replace(/"/g, '""');
+    }
+
+    downloadCSVFile(csvData, fileName) {
+        const blob = new Blob([csvData], {
+            type: 'text/csv;charset=utf-8;'
+        });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        this.showNotification('CSV exported successfully!', 'success');
+    }
+
     downloadFile(data, fileName) {
         const blob = new Blob([JSON.stringify(data, null, 2)], {
             type: 'application/json'
@@ -2902,9 +3091,35 @@ class TodoApp {
         // Close mobile actions menu first
         this.closeMobileActions();
         
+        // Show import options modal
+        this.openImportOptionsModal();
+    }
+
+    openImportOptionsModal() {
+        const modal = document.getElementById('importOptionsModal');
+        if (modal) {
+            modal.style.display = 'block';
+        }
+    }
+
+    closeImportOptionsModal() {
+        const modal = document.getElementById('importOptionsModal');
+        if (modal) {
+            modal.style.display = 'none';
+        }
+    }
+
+    openJSONImportModal() {
+        this.closeImportOptionsModal();
         const modal = document.getElementById('importModal');
         modal.style.display = 'block';
         this.setupFileUpload();
+    }
+
+    openCSVImportModal() {
+        this.closeImportOptionsModal();
+        const modal = document.getElementById('csvImportModal');
+        modal.style.display = 'block';
     }
 
     closeImportModal() {
@@ -3139,8 +3354,8 @@ class TodoApp {
         // Style the notification
         Object.assign(notification.style, {
             position: 'fixed',
-            top: '20px',
-            right: '20px',
+            top: 'calc(20px + env(safe-area-inset-top, 0px))',
+            right: 'calc(20px + env(safe-area-inset-right, 0px))',
             padding: '12px 20px',
             borderRadius: '8px',
             color: 'white',
@@ -3160,6 +3375,15 @@ class TodoApp {
             warning: '#f59e0b'
         };
         notification.style.backgroundColor = colors[type] || colors.info;
+
+        // Add mobile-specific positioning
+        if (window.innerWidth <= 768) {
+            // On mobile, position notifications more centrally and adjust width
+            notification.style.right = 'calc(10px + env(safe-area-inset-right, 0px))';
+            notification.style.left = 'calc(10px + env(safe-area-inset-left, 0px))';
+            notification.style.maxWidth = 'calc(100vw - 20px - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px))';
+            notification.style.width = 'auto';
+        }
 
         // Add to page
         document.body.appendChild(notification);
@@ -3314,7 +3538,7 @@ class TodoApp {
         toast.setAttribute('role', 'status');
         toast.setAttribute('aria-live', 'polite');
         toast.style.position = 'fixed';
-        toast.style.bottom = `calc(16px + env(safe-area-inset-bottom))`;
+        toast.style.bottom = `calc(16px + env(safe-area-inset-bottom, 0px))`;
         toast.style.left = '50%';
         toast.style.transform = 'translateX(-50%)';
         toast.style.background = '#111827';
@@ -3920,6 +4144,9 @@ class TodoApp {
     }
 
     openHelpModal() {
+        // Close mobile actions menu first
+        this.closeMobileActions();
+        
         const modal = document.getElementById('helpModal');
         if (modal) {
             modal.style.display = 'block';
@@ -4025,8 +4252,12 @@ class TodoApp {
                 <h4>💾 Import & Export</h4>
                 <p>Backup and restore your data:</p>
                 <ul>
-                    <li><strong>Export:</strong> Download your data as a JSON file</li>
-                    <li><strong>Import:</strong> Upload a JSON file to restore data</li>
+                    <li><strong>JSON Export:</strong> Download your data as a JSON file for full backup</li>
+                    <li><strong>JSON Import:</strong> Upload a JSON file to restore complete data</li>
+                    <li><strong>CSV Export:</strong> Export tasks to CSV format for spreadsheet compatibility</li>
+                    <li><strong>CSV Import:</strong> Import tasks from CSV files with field mapping</li>
+                    <li><strong>Field Mapping:</strong> Map your CSV columns to app fields (title, description, due date, etc.)</li>
+                    <li><strong>CSV Help:</strong> Built-in guide for CSV formatting and field requirements</li>
                     <li><strong>Backup:</strong> Regular exports ensure you never lose data</li>
                 </ul>
             </div>
@@ -4849,6 +5080,426 @@ class TodoApp {
                 this.updateSyncStatusIndicator('error');
             }
         }, 30000); // 30 seconds (battery optimized)
+    }
+
+    // CSV Import functionality
+    closeCSVImportModal() {
+        const modal = document.getElementById('csvImportModal');
+        modal.style.display = 'none';
+    }
+
+    handleCSVFileSelection(file) {
+        if (!file) return;
+        
+        if (!file.name.toLowerCase().endsWith('.csv')) {
+            this.showNotification('Please select a CSV file', 'error');
+            return;
+        }
+
+        this.csvFile = file;
+        this.showSelectedCSVFile(file.name);
+        this.parseCSVFile(file);
+    }
+
+    showSelectedCSVFile(fileName) {
+        const selectedFile = document.getElementById('csvSelectedFile');
+        const fileUpload = document.getElementById('csvFileUpload');
+        
+        selectedFile.style.display = 'block';
+        fileUpload.style.display = 'none';
+        
+        const fileNameSpan = selectedFile.querySelector('.file-name');
+        fileNameSpan.textContent = fileName;
+    }
+
+    removeCSVFile() {
+        this.csvFile = null;
+        this.csvData = null;
+        this.csvHeaders = null;
+        
+        const selectedFile = document.getElementById('csvSelectedFile');
+        const fileUpload = document.getElementById('csvFileUpload');
+        
+        selectedFile.style.display = 'none';
+        fileUpload.style.display = 'block';
+    }
+
+    async parseCSVFile(file) {
+        try {
+            const text = await file.text();
+            const lines = text.split('\n').filter(line => line.trim());
+            
+            if (lines.length === 0) {
+                this.showNotification('CSV file is empty', 'error');
+                return;
+            }
+
+            // Parse CSV headers
+            this.csvHeaders = this.parseCSVLine(lines[0]);
+            this.csvData = lines.slice(1).map(line => this.parseCSVLine(line));
+            
+            // Show field mapping step
+            this.showFieldMapping();
+            
+        } catch (error) {
+            console.error('Error parsing CSV:', error);
+            this.showNotification('Error reading CSV file: ' + error.message, 'error');
+        }
+    }
+
+    parseCSVLine(line) {
+        const result = [];
+        let current = '';
+        let inQuotes = false;
+        
+        for (let i = 0; i < line.length; i++) {
+            const char = line[i];
+            
+            if (char === '"') {
+                if (inQuotes && line[i + 1] === '"') {
+                    // Escaped quote
+                    current += '"';
+                    i++; // Skip next quote
+                } else {
+                    // Toggle quote state
+                    inQuotes = !inQuotes;
+                }
+            } else if (char === ',' && !inQuotes) {
+                result.push(current.trim());
+                current = '';
+            } else {
+                current += char;
+            }
+        }
+        
+        result.push(current.trim());
+        return result;
+    }
+
+    showFieldMapping() {
+        document.getElementById('step1').style.display = 'none';
+        document.getElementById('step2').style.display = 'block';
+        
+        const fieldMapping = document.getElementById('fieldMapping');
+        fieldMapping.innerHTML = '';
+        
+        // Define app fields
+        const appFields = [
+            { key: 'title', label: 'Title', required: true },
+            { key: 'description', label: 'Description', required: false },
+            { key: 'status', label: 'Status (Column)', required: true },
+            { key: 'priority', label: 'Priority', required: false },
+            { key: 'created_at', label: 'Created Date', required: false },
+            { key: 'due_date', label: 'Due Date', required: false },
+            { key: 'tags', label: 'Tags', required: false },
+            { key: 'notes', label: 'Notes', required: false },
+            { key: 'subtasks', label: 'Subtasks', required: false },
+            { key: 'pending_reason', label: 'Pending Reason', required: false }
+        ];
+        
+        appFields.forEach(field => {
+            const mappingRow = document.createElement('div');
+            mappingRow.className = 'mapping-row';
+            
+            mappingRow.innerHTML = `
+                <div class="field-label">
+                    <label>${field.label}${field.required ? ' *' : ''}</label>
+                </div>
+                <div class="field-select">
+                    <select class="field-mapping-select" data-field="${field.key}">
+                        <option value="">-- Select CSV Column --</option>
+                        ${this.csvHeaders.map((header, index) => 
+                            `<option value="${index}">${header}</option>`
+                        ).join('')}
+                    </select>
+                </div>
+            `;
+            
+            fieldMapping.appendChild(mappingRow);
+        });
+    }
+
+    goToStep1() {
+        document.getElementById('step2').style.display = 'none';
+        document.getElementById('step1').style.display = 'block';
+    }
+
+    async proceedWithImport() {
+        const mappings = {};
+        const selectElements = document.querySelectorAll('.field-mapping-select');
+        
+        // Collect mappings
+        selectElements.forEach(select => {
+            const fieldKey = select.dataset.field;
+            const csvIndex = select.value;
+            if (csvIndex !== '') {
+                mappings[fieldKey] = parseInt(csvIndex);
+            }
+        });
+        
+        // Validate required fields
+        const requiredFields = ['title', 'status'];
+        const missingFields = requiredFields.filter(field => mappings[field] === undefined);
+        
+        if (missingFields.length > 0) {
+            this.showNotification(`Please map required fields: ${missingFields.join(', ')}`, 'error');
+            return;
+        }
+        
+        try {
+            // Convert CSV data to app format
+            const tasks = [];
+            const notes = [];
+            const subtasks = [];
+            
+            this.csvData.forEach((row, index) => {
+                const taskId = Date.now() + index; // Generate unique ID
+                const task = {
+                    id: taskId,
+                    title: mappings.title !== undefined ? row[mappings.title] : '',
+                    description: mappings.description !== undefined ? row[mappings.description] : '',
+                    status: mappings.status !== undefined ? row[mappings.status] : 'todo',
+                    priority: mappings.priority !== undefined ? row[mappings.priority] : 'medium',
+                    created_at: mappings.created_at !== undefined ? this.parseDate(row[mappings.created_at]) : new Date().toISOString(),
+                    due_date: mappings.due_date !== undefined ? this.parseDate(row[mappings.due_date]) : null,
+                    tags: mappings.tags !== undefined ? this.parseTags(row[mappings.tags]) : [],
+                    pending_reason: mappings.pending_reason !== undefined ? row[mappings.pending_reason] : null
+                };
+                
+                tasks.push(task);
+                
+                // Process notes if mapped
+                if (mappings.notes !== undefined && row[mappings.notes]) {
+                    const notesText = row[mappings.notes];
+                    if (notesText.trim()) {
+                        // Split by pipe separator for multiple notes
+                        const noteList = notesText.split('|').map(note => note.trim()).filter(note => note);
+                        noteList.forEach(noteText => {
+                            notes.push({
+                                id: Date.now() + Math.random() * 1000, // Generate unique ID
+                                task_id: taskId,
+                                content: noteText,
+                                created_at: new Date().toISOString()
+                            });
+                        });
+                    }
+                }
+                
+                // Process subtasks if mapped
+                if (mappings.subtasks !== undefined && row[mappings.subtasks]) {
+                    const subtasksText = row[mappings.subtasks];
+                    if (subtasksText.trim()) {
+                        // Split by pipe separator for multiple subtasks
+                        const subtaskList = subtasksText.split('|').map(subtask => subtask.trim()).filter(subtask => subtask);
+                        subtaskList.forEach(subtaskText => {
+                            // Check if subtask is marked as completed
+                            const isCompleted = subtaskText.startsWith('[✓]') || subtaskText.startsWith('[x]') || subtaskText.startsWith('[X]') || subtaskText.endsWith(' (Completed)');
+                            let cleanTitle = subtaskText;
+                            if (isCompleted) {
+                                if (subtaskText.startsWith('[✓]') || subtaskText.startsWith('[x]') || subtaskText.startsWith('[X]')) {
+                                    cleanTitle = subtaskText.replace(/^\[[✓xX]\]\s*/, '');
+                                } else if (subtaskText.endsWith(' (Completed)')) {
+                                    cleanTitle = subtaskText.replace(/\s*\(Completed\)$/, '');
+                                }
+                            }
+                            
+                            subtasks.push({
+                                id: Date.now() + Math.random() * 1000, // Generate unique ID
+                                task_id: taskId,
+                                title: cleanTitle,
+                                completed: isCompleted,
+                                created_at: new Date().toISOString()
+                            });
+                        });
+                    }
+                }
+            });
+            
+            // Import the data
+            const importData = {
+                data: {
+                    tasks: tasks,
+                    notes: notes,
+                    subtasks: subtasks
+                }
+            };
+            
+            await window.RobustDataService.importData(importData, { clearExisting: false });
+            
+            // Reload tasks
+            await this.loadTasks();
+            
+            // Close modal
+            this.closeCSVImportModal();
+            
+            this.showNotification(`Successfully imported ${tasks.length} tasks, ${notes.length} notes, and ${subtasks.length} subtasks from CSV!`, 'success');
+            
+        } catch (error) {
+            console.error('CSV import error:', error);
+            this.showNotification('Failed to import CSV: ' + error.message, 'error');
+        }
+    }
+
+    parseDate(dateString) {
+        if (!dateString || dateString.trim() === '') return null;
+        
+        try {
+            // Try to parse various date formats
+            const date = new Date(dateString);
+            if (isNaN(date.getTime())) return null;
+            return date.toISOString();
+        } catch (error) {
+            return null;
+        }
+    }
+
+    parseTags(tagsString) {
+        if (!tagsString || tagsString.trim() === '') return [];
+        
+        return tagsString.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0);
+    }
+
+    // CSV Help Modal functionality
+    openCSVHelpModal() {
+        const modal = document.getElementById('csvHelpModal');
+        if (modal) {
+            modal.style.display = 'block';
+            this.populateCSVHelpContent();
+        }
+    }
+
+    closeCSVHelpModal() {
+        const modal = document.getElementById('csvHelpModal');
+        if (modal) {
+            modal.style.display = 'none';
+        }
+    }
+
+    populateCSVHelpContent() {
+        const content = document.getElementById('csvHelpContent');
+        if (!content) return;
+
+        content.innerHTML = `
+            <div class="csv-help-section">
+                <h4>📋 CSV File Structure</h4>
+                <p>Your CSV file should have a header row with column names, followed by data rows. Here's the recommended format:</p>
+                
+                <div class="csv-example">
+                    <h5>Example CSV Structure:</h5>
+                    <pre><code>Title,Description,Status,Priority,Due Date,Tags,Notes,Subtasks
+"Complete project proposal","Write detailed proposal for Q1 project","todo","high","2024-02-15","@work,urgent","Remember to include budget estimates|Check with finance team|Review timeline","Research requirements|Create timeline|Review with team"
+"Buy groceries","Weekly shopping trip","todo","medium","","@personal","Check fridge first|Bring reusable bags","Milk|Bread|Eggs"
+"Team meeting","Weekly standup","done","low","","@work","Meeting went well|Action items noted",""
+"Fix bug in system","Critical bug fix","in_progress","high","2024-01-18","@work,bug","Bug reported by users|Priority fix needed","[✓] Reproduce bug|[✓] Write tests|Fix authentication|Test with users"</code></pre>
+                </div>
+            </div>
+
+            <div class="csv-help-section">
+                <h4>📝 Field Formatting Guidelines</h4>
+                
+                <div class="field-guidelines">
+                    <div class="guideline-item">
+                        <strong>Title:</strong> <span class="required">Required</span> - Task title (keep it concise)
+                    </div>
+                    <div class="guideline-item">
+                        <strong>Description:</strong> <span class="optional">Optional</span> - Detailed task description
+                    </div>
+                    <div class="guideline-item">
+                        <strong>Status:</strong> <span class="required">Required</span> - Use: <code>todo</code>, <code>in_progress</code>, <code>pending</code>, or <code>done</code>
+                    </div>
+                    <div class="guideline-item">
+                        <strong>Priority:</strong> <span class="optional">Optional</span> - Use: <code>urgent</code>, <code>high</code>, <code>medium</code>, or <code>low</code>
+                    </div>
+                    <div class="guideline-item">
+                        <strong>Due Date:</strong> <span class="optional">Optional</span> - Format: <code>YYYY-MM-DD</code> or <code>MM/DD/YYYY</code>
+                    </div>
+                    <div class="guideline-item">
+                        <strong>Tags:</strong> <span class="optional">Optional</span> - Separate multiple tags with commas: <code>work,urgent,project</code>
+                    </div>
+                    <div class="guideline-item">
+                        <strong>Category Tags:</strong> <span class="optional">Optional</span> - Use @ symbol for categories: <code>@work</code>, <code>@personal</code>, <code>@urgent</code>
+                    </div>
+                    <div class="guideline-item">
+                        <strong>Notes:</strong> <span class="optional">Optional</span> - Additional notes or comments. For multiple notes, separate with pipe (|): <code>Note 1|Note 2|Note 3</code>
+                    </div>
+                    <div class="guideline-item">
+                        <strong>Subtasks:</strong> <span class="optional">Optional</span> - Separate multiple subtasks with pipe (|): <code>Task 1|Task 2|Task 3</code><br>
+                        <small>Mark completed subtasks with <code>[✓]</code> or <code>[x]</code>: <code>[✓] Completed task|Pending task|[x] Another completed task</code></small>
+                    </div>
+                </div>
+            </div>
+
+            <div class="csv-help-section">
+                <h4>📝 Notes & Categories</h4>
+                <div class="special-formatting">
+                    <div class="format-item">
+                        <h5>Multiple Notes:</h5>
+                        <p>To add multiple notes to a task, separate them with pipe (|):</p>
+                        <div class="code-example">
+                            <code>"First note|Second note|Third note"</code>
+                        </div>
+                    </div>
+                    <div class="format-item">
+                        <h5>Category Tags:</h5>
+                        <p>Use the @ symbol to create category tags that appear in the app's category filters:</p>
+                        <div class="code-example">
+                            <code>"@work,urgent,project"</code>
+                        </div>
+                        <p><small>Categories like @work, @personal, @urgent will create filterable categories in the app</small></p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="csv-help-section">
+                <h4>💡 Pro Tips</h4>
+                <ul class="tips-list">
+                    <li><strong>Quotes:</strong> If your data contains commas, wrap the entire field in double quotes: <code>"Task with, comma"</code></li>
+                    <li><strong>Escaping:</strong> To include a quote in quoted text, use two quotes: <code>"He said ""Hello"" to me"</code></li>
+                    <li><strong>Empty Fields:</strong> Leave fields empty if you don't have data for them</li>
+                    <li><strong>Date Formats:</strong> The app accepts various date formats, but <code>YYYY-MM-DD</code> works best</li>
+                    <li><strong>Multiple Notes:</strong> Separate multiple notes with pipe (|): <code>"Note 1|Note 2|Note 3"</code></li>
+                    <li><strong>Category Tags:</strong> Use @ symbol for categories within the Tags field: <code>@work</code>, <code>@personal</code>, <code>@urgent</code></li>
+                    <li><strong>Special Characters:</strong> Avoid using pipe (|) in your data unless it's for separating notes or subtasks</li>
+                </ul>
+            </div>
+
+            <div class="csv-help-section">
+                <h4>📊 Sample CSV Template</h4>
+                <p>Copy this template and replace with your data:</p>
+                <div class="csv-template">
+                    <pre><code>Title,Description,Status,Priority,Due Date,Tags,Notes,Subtasks
+"Sample Task 1","This is a sample task description","todo","high","2024-02-15","@work,sample","Additional notes here|Second note|Third note","Subtask 1|Subtask 2|Subtask 3"
+"Sample Task 2","Another task example","in_progress","medium","","@personal","Single note here",""
+"Completed Task","This task is already done","done","low","","@work","Task completed successfully|All requirements met",""</code></pre>
+                </div>
+            </div>
+
+            <div class="csv-help-section">
+                <h4>⚠️ Common Issues</h4>
+                <div class="issues-list">
+                    <div class="issue-item">
+                        <strong>Problem:</strong> Import fails with "Please map required fields"
+                        <br><strong>Solution:</strong> Make sure you have columns for "Title" and "Status" in your CSV
+                    </div>
+                    <div class="issue-item">
+                        <strong>Problem:</strong> Data appears with extra quotes
+                        <br><strong>Solution:</strong> Check that your CSV properly escapes quotes and commas
+                    </div>
+                    <div class="issue-item">
+                        <strong>Problem:</strong> Dates not importing correctly
+                        <br><strong>Solution:</strong> Use standard date formats like YYYY-MM-DD or MM/DD/YYYY
+                    </div>
+                    <div class="issue-item">
+                        <strong>Problem:</strong> Subtasks not separating properly
+                        <br><strong>Solution:</strong> Use pipe (|) to separate subtasks, not commas
+                    </div>
+                </div>
+            </div>
+
+            <div class="csv-help-footer">
+                <p><strong>Need more help?</strong> Try exporting your current data to CSV first to see the exact format the app expects!</p>
+            </div>
+        `;
     }
 }
 

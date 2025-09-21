@@ -562,6 +562,9 @@ body[data-theme="dark"] .help-footer p {
 body[data-theme="dark"] .mobile-overlay .mo-content {
     background: #0f172a;
     border-color: #334155;
+    /* Ensure dark mode content is below safe area */
+    margin-top: calc(-1 * env(safe-area-inset-top, 0px));
+    padding-top: calc(16px + env(safe-area-inset-top, 0px));
 }
 
 body[data-theme="dark"] .mo-header input {
@@ -2387,8 +2390,8 @@ body[data-theme="dark"] .edit-note-textarea:focus {
         justify-content: space-between;
         gap: 12px;
         text-align: left;
-        padding: calc(8px + env(safe-area-inset-top)) 16px 8px 16px;
-        min-height: calc(48px + env(safe-area-inset-top));
+        padding: 8px 16px 8px 16px;
+        min-height: 44px;
     }
     
     .header-logo {
@@ -2557,7 +2560,7 @@ body[data-theme="dark"] .edit-note-textarea:focus {
         border-radius: 8px;
         background: #fff;
         font-size: 0.85rem;
-        color: #4a5568;
+        color: #374151;
         position: relative;
         transition: all 0.2s ease;
         cursor: pointer;
@@ -2626,6 +2629,11 @@ body[data-theme="dark"] .edit-note-textarea:focus {
         display: none; 
         align-items: flex-start;
         backdrop-filter: blur(4px);
+        /* Add safe area insets to avoid protected areas */
+        padding-top: env(safe-area-inset-top, 0px);
+        padding-bottom: env(safe-area-inset-bottom, 0px);
+        padding-left: env(safe-area-inset-left, 0px);
+        padding-right: env(safe-area-inset-right, 0px);
     }
     
     .mobile-overlay .mo-content { 
@@ -2636,6 +2644,9 @@ body[data-theme="dark"] .edit-note-textarea:focus {
         padding: 16px; 
         box-shadow: 0 8px 32px rgba(0,0,0,0.15);
         animation: slideDown 0.3s ease-out;
+        /* Ensure content is below safe area */
+        margin-top: calc(-1 * env(safe-area-inset-top, 0px));
+        padding-top: calc(16px + env(safe-area-inset-top, 0px));
     }
     
     @keyframes slideDown {
@@ -2858,6 +2869,11 @@ body[data-theme="dark"] .edit-note-textarea:focus {
         top: 0;
         left: 0;
         position: fixed;
+        /* Add safe area insets to avoid protected areas */
+        padding-top: env(safe-area-inset-top, 20px);
+        padding-bottom: env(safe-area-inset-bottom, 0px);
+        padding-left: env(safe-area-inset-left, 0px);
+        padding-right: env(safe-area-inset-right, 0px);
     }
     
     .modal-header {
@@ -2867,6 +2883,20 @@ body[data-theme="dark"] .edit-note-textarea:focus {
         z-index: 10;
         border-bottom: 1px solid #e2e8f0;
         padding: 15px 20px;
+        /* Ensure header is below safe area */
+        margin-top: calc(-1 * env(safe-area-inset-top, 0px));
+        padding-top: calc(15px + env(safe-area-inset-top, 0px));
+    }
+    
+    /* Dark mode support for sticky header */
+    body[data-theme="dark"] .modal-header {
+        background: rgba(15, 23, 42, 0.95);
+        border-bottom-color: #334155;
+    }
+    
+    /* Specific spacing for notes modal content */
+    #notesModal .notes-container {
+        padding-top: calc(20px + env(safe-area-inset-top, 0px) + 80px);
     }
     
     .modal-header h3 {
@@ -2876,7 +2906,70 @@ body[data-theme="dark"] .edit-note-textarea:focus {
     #taskForm {
         padding: 20px;
         overflow-y: auto;
-        max-height: calc(100vh - 80px);
+        max-height: calc(100vh - 80px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+        /* Add extra top padding to account for sticky header */
+        padding-top: calc(20px + env(safe-area-inset-top, 0px) + 80px);
+    }
+    
+    /* Ensure help and CSV modals work well on mobile */
+    .help-modal-content,
+    .csv-help-modal .modal-content,
+    #editNoteModal .modal-content,
+    #notesModal .modal-content,
+    #taskModal .modal-content,
+    #pendingReasonModal .modal-content,
+    #printModal .modal-content,
+    #exportOptionsModal .modal-content,
+    #importOptionsModal .modal-content {
+        max-height: calc(100vh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+        overflow-y: auto;
+    }
+    
+    .csv-import-modal .modal-content,
+    #importModal .modal-content {
+        max-height: calc(100vh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+        overflow-y: auto;
+    }
+    
+    .csv-import-modal .modal-header,
+    #importModal .modal-header {
+        position: sticky;
+        top: 0;
+        z-index: 20;
+        background: inherit;
+        border-bottom: 1px solid #e2e8f0;
+    }
+    
+    /* Dark mode support for CSV import modal header */
+    body[data-theme="dark"] .csv-import-modal .modal-header,
+    body[data-theme="dark"] #importModal .modal-header {
+        background: rgba(15, 23, 42, 0.95);
+        border-bottom-color: #334155;
+    }
+    
+    /* Make sure close button is always visible */
+    .modal-close {
+        position: sticky;
+        top: 0;
+        z-index: 20;
+        background: inherit;
+    }
+    
+    /* Additional mobile improvements for very small screens */
+    @media (max-height: 600px) {
+        .help-modal-content,
+        .csv-help-modal .modal-content {
+            max-height: 100vh;
+            overflow-y: auto;
+        }
+        
+        .modal-header {
+            padding: 10px 15px;
+        }
+        
+        .modal-header h3 {
+            font-size: 1rem;
+        }
     }
     
     .form-group {
@@ -2923,6 +3016,8 @@ body[data-theme="dark"] .edit-note-textarea:focus {
     
     .notes-container {
         padding: 20px;
+        /* Add extra top padding to account for sticky header */
+        padding-top: calc(20px + env(safe-area-inset-top, 0px) + 60px);
     }
     
     .add-note textarea {
@@ -2942,8 +3037,8 @@ body[data-theme="dark"] .edit-note-textarea:focus {
     }
     
     .header {
-        padding: calc(6px + env(safe-area-inset-top)) 12px 6px 12px;
-        min-height: calc(44px + env(safe-area-inset-top));
+        padding: 6px 12px 6px 12px;
+        min-height: 40px;
     }
     
     .header .logo {
@@ -2997,6 +3092,8 @@ body[data-theme="dark"] .edit-note-textarea:focus {
     
     #taskForm {
         padding: 15px;
+        /* Add extra top padding to account for sticky header on smaller screens */
+        padding-top: calc(15px + env(safe-area-inset-top, 0px) + 80px);
     }
     
     .notes-container {
@@ -3802,12 +3899,16 @@ ing Reason Modal */
 }
 
 .subtasks-list {
-    display: none;
+    max-height: 0;
+    overflow: hidden;
     margin-top: 8px;
+    transition: max-height 0.3s ease, opacity 0.3s ease;
+    opacity: 0;
 }
 
 .subtasks-list.expanded {
-    display: block;
+    max-height: 500px;
+    opacity: 1;
 }
 
 .subtask-item {
@@ -4012,16 +4113,19 @@ body[data-theme="dark"] .subtask-item .subtask-text {
     .subtasks-list {
         max-height: 0;
         overflow: hidden;
-        transition: max-height 0.3s ease;
+        transition: max-height 0.3s ease, opacity 0.3s ease;
+        opacity: 0;
     }
     
     .subtasks-list.expanded {
         max-height: 500px; /* Increased from 200px to allow more subtasks */
+        opacity: 1;
     }
     
     /* Ensure subtasks are visible when expanded on mobile */
     .subtasks-list[style*="display: block"] {
         max-height: 500px !important;
+        opacity: 1 !important;
         overflow: visible !important;
     }
     
@@ -4060,8 +4164,8 @@ body[data-theme="dark"] .subtask-item .subtask-text {
     /* Make sure subtasks are properly visible when expanded */
     .subtasks-list.expanded,
     .subtasks-list[style*="display: block"] {
-        display: block !important;
         max-height: 500px !important;
+        opacity: 1 !important;
         overflow: visible !important;
     }
 }
@@ -5071,7 +5175,7 @@ ile count badges for bottom navigation */
     position: absolute;
     top: 4px;
     right: 6px;
-    background: var(--primary-color);
+    background: #6366f1;
     color: white;
     font-size: 0.7rem;
     font-weight: 600;
@@ -5107,7 +5211,7 @@ ile count badges for bottom navigation */
 /* Active segment badge styling */
 .mobile-segment.active .mobile-count-badge {
     background: #ffffff;
-    color: var(--primary-color);
+    color: #6366f1;
 }
 
 [data-theme="dark"] .mobile-segment.active .mobile-count-badge {
@@ -5244,6 +5348,45 @@ es badge styling */
 #editNoteModal .modal-content {
     max-width: 500px;
     width: 90%;
+}
+
+/* Mobile overrides for edit note modal */
+@media (max-width: 768px) {
+    #editNoteModal .modal-content {
+        max-width: 100%;
+        width: 100%;
+        height: 100%;
+        max-height: 100vh;
+        border-radius: 0;
+        margin: 0;
+        transform: none;
+        top: 0;
+        left: 0;
+        position: fixed;
+        /* Add safe area insets to avoid protected areas */
+        padding-top: env(safe-area-inset-top, 20px);
+        padding-bottom: env(safe-area-inset-bottom, 0px);
+        padding-left: env(safe-area-inset-left, 0px);
+        padding-right: env(safe-area-inset-right, 0px);
+    }
+    
+    #editNoteModal .modal-header {
+        position: sticky;
+        top: 0;
+        background: white;
+        z-index: 10;
+        border-bottom: 1px solid #e2e8f0;
+        padding: 15px 20px;
+        /* Ensure header is below safe area */
+        margin-top: calc(-1 * env(safe-area-inset-top, 0px));
+        padding-top: calc(15px + env(safe-area-inset-top, 0px));
+    }
+    
+    /* Dark mode support for sticky header */
+    body[data-theme="dark"] #editNoteModal .modal-header {
+        background: rgba(15, 23, 42, 0.95);
+        border-bottom-color: #334155;
+    }
 }
 
 #editNoteModal textarea {
@@ -5405,4 +5548,668 @@ es badge styling */
         font-size: 0.7rem;
         padding: 1px 4px;
     }
+}
+
+/* Export Options Modal Styles */
+.export-options {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin-top: 20px;
+}
+
+.export-option-btn {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 20px;
+    border: 2px solid #e2e8f0;
+    border-radius: 12px;
+    background: white;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-align: left;
+    width: 100%;
+}
+
+.export-option-btn:hover {
+    border-color: #667eea;
+    background: #f8faff;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15);
+}
+
+.export-option-icon {
+    flex-shrink: 0;
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #f1f5f9;
+    border-radius: 8px;
+    color: #64748b;
+}
+
+.export-option-btn:hover .export-option-icon {
+    background: #667eea;
+    color: white;
+}
+
+.export-option-content h4 {
+    margin: 0 0 8px 0;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #1e293b;
+}
+
+.export-option-content p {
+    margin: 0;
+    font-size: 0.9rem;
+    color: #64748b;
+    line-height: 1.5;
+}
+
+/* Dark mode for export options */
+body[data-theme="dark"] .export-option-btn {
+    background: #1e293b;
+    border-color: #334155;
+    color: #e2e8f0;
+}
+
+body[data-theme="dark"] .export-option-btn:hover {
+    background: #334155;
+    border-color: #667eea;
+}
+
+body[data-theme="dark"] .export-option-icon {
+    background: #334155;
+    color: #94a3b8;
+}
+
+body[data-theme="dark"] .export-option-btn:hover .export-option-icon {
+    background: #667eea;
+    color: white;
+}
+
+body[data-theme="dark"] .export-option-content h4 {
+    color: #f1f5f9;
+}
+
+body[data-theme="dark"] .export-option-content p {
+    color: #94a3b8;
+}
+
+/* CSV Import Modal Styles */
+.csv-import-modal {
+    max-width: 600px;
+}
+
+.csv-import-steps {
+    margin-top: 20px;
+}
+
+.step h4 {
+    margin: 0 0 16px 0;
+    color: #1e293b;
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+.file-upload-area {
+    border: 2px dashed #cbd5e1;
+    border-radius: 8px;
+    padding: 40px 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    background: #f8fafc;
+}
+
+.file-upload-area:hover {
+    border-color: #667eea;
+    background: #f0f4ff;
+}
+
+.upload-placeholder svg {
+    color: #94a3b8;
+    margin-bottom: 12px;
+}
+
+.upload-placeholder p {
+    margin: 0 0 8px 0;
+    font-weight: 500;
+    color: #475569;
+}
+
+.upload-placeholder small {
+    color: #64748b;
+    font-size: 0.875rem;
+}
+
+.selected-file {
+    border: 2px solid #10b981;
+    border-radius: 8px;
+    padding: 16px;
+    background: #f0fdf4;
+    margin-top: 16px;
+}
+
+.file-info {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.file-name {
+    font-weight: 500;
+    color: #065f46;
+}
+
+.remove-file {
+    background: #ef4444;
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: bold;
+}
+
+.remove-file:hover {
+    background: #dc2626;
+}
+
+.field-mapping {
+    margin: 20px 0;
+}
+
+.mapping-row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 16px;
+    padding: 12px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    background: white;
+}
+
+.field-label {
+    flex: 0 0 200px;
+}
+
+.field-label label {
+    font-weight: 500;
+    color: #374151;
+    margin: 0;
+}
+
+.field-select {
+    flex: 1;
+}
+
+.field-mapping-select {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    background: white;
+    font-size: 0.9rem;
+}
+
+.field-mapping-select:focus {
+    outline: none;
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.mapping-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+    margin-top: 24px;
+    padding-top: 20px;
+    border-top: 1px solid #e2e8f0;
+}
+
+.btn-secondary {
+    background: #f1f5f9;
+    color: #475569;
+    border: 1px solid #cbd5e1;
+    padding: 10px 20px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+.btn-secondary:hover {
+    background: #e2e8f0;
+    border-color: #94a3b8;
+}
+
+.btn-primary {
+    background: #667eea;
+    color: white;
+    border: 1px solid #667eea;
+    padding: 10px 20px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+.btn-primary:hover {
+    background: #5a67d8;
+    border-color: #5a67d8;
+}
+
+/* Dark mode for CSV import */
+body[data-theme="dark"] .step h4 {
+    color: #f1f5f9;
+}
+
+body[data-theme="dark"] .file-upload-area {
+    border-color: #475569;
+    background: #1e293b;
+}
+
+body[data-theme="dark"] .file-upload-area:hover {
+    border-color: #667eea;
+    background: #334155;
+}
+
+body[data-theme="dark"] .upload-placeholder svg {
+    color: #94a3b8;
+}
+
+body[data-theme="dark"] .upload-placeholder p {
+    color: #e2e8f0;
+}
+
+body[data-theme="dark"] .upload-placeholder small {
+    color: #94a3b8;
+}
+
+body[data-theme="dark"] .selected-file {
+    border-color: #10b981;
+    background: #064e3b;
+}
+
+body[data-theme="dark"] .file-name {
+    color: #6ee7b7;
+}
+
+body[data-theme="dark"] .mapping-row {
+    border-color: #475569;
+    background: #1e293b;
+}
+
+body[data-theme="dark"] .field-label label {
+    color: #e2e8f0;
+}
+
+body[data-theme="dark"] .field-mapping-select {
+    border-color: #475569;
+    background: #1e293b;
+    color: #e2e8f0;
+}
+
+body[data-theme="dark"] .field-mapping-select:focus {
+    border-color: #667eea;
+}
+
+body[data-theme="dark"] .mapping-actions {
+    border-color: #475569;
+}
+
+body[data-theme="dark"] .btn-secondary {
+    background: #334155;
+    color: #e2e8f0;
+    border-color: #475569;
+}
+
+body[data-theme="dark"] .btn-secondary:hover {
+    background: #475569;
+    border-color: #64748b;
+}
+
+/* CSV Help Modal Styles */
+.csv-help-modal {
+    max-width: 800px;
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+.step-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+}
+
+.help-btn-small {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background: #f1f5f9;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    color: #475569;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.help-btn-small:hover {
+    background: #e2e8f0;
+    border-color: #94a3b8;
+    color: #334155;
+}
+
+.csv-help-section {
+    margin-bottom: 24px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.csv-help-section:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+}
+
+.csv-help-section h4 {
+    margin: 0 0 12px 0;
+    color: #1e293b;
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+.csv-help-section h5 {
+    margin: 0 0 8px 0;
+    color: #374151;
+    font-size: 1rem;
+    font-weight: 500;
+}
+
+.csv-example, .csv-template {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 16px;
+    margin: 12px 0;
+    overflow-x: auto;
+}
+
+.csv-example pre, .csv-template pre {
+    margin: 0;
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 0.8rem;
+    line-height: 1.4;
+    color: #374151;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+.field-guidelines {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.guideline-item {
+    padding: 12px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    line-height: 1.5;
+}
+
+.guideline-item strong {
+    color: #1e293b;
+    font-weight: 600;
+}
+
+.guideline-item code {
+    background: #f1f5f9;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 0.8rem;
+    color: #7c3aed;
+}
+
+.required {
+    background: #fef2f2;
+    color: #dc2626;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.optional {
+    background: #f0f9ff;
+    color: #0369a1;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.tips-list {
+    margin: 0;
+    padding-left: 20px;
+}
+
+.tips-list li {
+    margin-bottom: 8px;
+    line-height: 1.5;
+}
+
+.tips-list code {
+    background: #f1f5f9;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 0.8rem;
+    color: #7c3aed;
+}
+
+.issues-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.issue-item {
+    padding: 12px;
+    background: #fef7f0;
+    border: 1px solid #fed7aa;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    line-height: 1.5;
+}
+
+.issue-item strong {
+    color: #9a3412;
+    font-weight: 600;
+}
+
+.csv-help-footer {
+    background: #f0f9ff;
+    border: 1px solid #bae6fd;
+    border-radius: 8px;
+    padding: 16px;
+    margin-top: 20px;
+}
+
+.csv-help-footer p {
+    margin: 0;
+    color: #0c4a6e;
+    font-weight: 500;
+}
+
+/* Dark mode for CSV help */
+body[data-theme="dark"] .help-btn-small {
+    background: #334155;
+    border-color: #475569;
+    color: #e2e8f0;
+}
+
+body[data-theme="dark"] .help-btn-small:hover {
+    background: #475569;
+    border-color: #64748b;
+    color: #f1f5f9;
+}
+
+body[data-theme="dark"] .csv-help-section {
+    border-color: #475569;
+}
+
+body[data-theme="dark"] .csv-help-section h4 {
+    color: #f1f5f9;
+}
+
+body[data-theme="dark"] .csv-help-section h5 {
+    color: #e2e8f0;
+}
+
+body[data-theme="dark"] .csv-example, 
+body[data-theme="dark"] .csv-template {
+    background: #1e293b;
+    border-color: #475569;
+}
+
+body[data-theme="dark"] .csv-example pre, 
+body[data-theme="dark"] .csv-template pre {
+    color: #e2e8f0;
+}
+
+body[data-theme="dark"] .guideline-item {
+    background: #1e293b;
+    border-color: #475569;
+}
+
+body[data-theme="dark"] .guideline-item strong {
+    color: #f1f5f9;
+}
+
+body[data-theme="dark"] .guideline-item code {
+    background: #334155;
+    color: #a78bfa;
+}
+
+body[data-theme="dark"] .required {
+    background: #7f1d1d;
+    color: #fca5a5;
+}
+
+body[data-theme="dark"] .optional {
+    background: #1e3a8a;
+    color: #93c5fd;
+}
+
+body[data-theme="dark"] .tips-list code {
+    background: #334155;
+    color: #a78bfa;
+}
+
+body[data-theme="dark"] .issue-item {
+    background: #7c2d12;
+    border-color: #ea580c;
+}
+
+body[data-theme="dark"] .issue-item strong {
+    color: #fed7aa;
+}
+
+body[data-theme="dark"] .csv-help-footer {
+    background: #1e3a8a;
+    border-color: #3b82f6;
+}
+
+body[data-theme="dark"] .csv-help-footer p {
+    color: #93c5fd;
+}
+
+/* Special formatting section */
+.special-formatting {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.format-item {
+    padding: 16px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+}
+
+.format-item h5 {
+    margin: 0 0 8px 0;
+    color: #1e293b;
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.format-item p {
+    margin: 0 0 8px 0;
+    color: #475569;
+    font-size: 0.9rem;
+    line-height: 1.5;
+}
+
+.format-item small {
+    color: #64748b;
+    font-size: 0.8rem;
+    font-style: italic;
+}
+
+.code-example {
+    background: #f1f5f9;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    padding: 8px 12px;
+    margin: 8px 0;
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 0.85rem;
+    color: #7c3aed;
+    overflow-x: auto;
+}
+
+/* Dark mode for special formatting */
+body[data-theme="dark"] .format-item {
+    background: #1e293b;
+    border-color: #475569;
+}
+
+body[data-theme="dark"] .format-item h5 {
+    color: #f1f5f9;
+}
+
+body[data-theme="dark"] .format-item p {
+    color: #e2e8f0;
+}
+
+body[data-theme="dark"] .format-item small {
+    color: #94a3b8;
+}
+
+body[data-theme="dark"] .code-example {
+    background: #334155;
+    border-color: #475569;
+    color: #a78bfa;
 }
