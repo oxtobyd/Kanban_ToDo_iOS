@@ -57,7 +57,7 @@
                             <circle cx="11" cy="11" r="8"></circle>
                             <path d="m21 21-4.35-4.35"></path>
                         </svg>
-                        <input type="text" id="searchInput" placeholder="Search tasks..." onkeyup="app.handleSearch(this.value)">
+                        <input type="text" id="searchInput" placeholder="Search tasks..." oninput="app.handleSearch(this.value)">
                         <button id="clearSearch" onclick="app.clearSearch()" style="display: none;">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <line x1="18" y1="6" x2="6" y2="18"></line>

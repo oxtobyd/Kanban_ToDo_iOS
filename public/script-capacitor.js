@@ -218,6 +218,8 @@ class TodoApp {
             if (input) {
                 // Clear any existing search
                 input.value = this.currentSearch || '';
+                // Ensure the input has the proper event handler
+                input.oninput = (e) => this.handleSearch(e.target.value);
                 setTimeout(() => input.focus(), 50);
             }
 
@@ -506,6 +508,7 @@ class TodoApp {
     }
 
     handleSearch(searchTerm) {
+        console.log('handleSearch called with:', searchTerm);
         // Clear existing timeout
         if (this.searchTimeout) {
             clearTimeout(this.searchTimeout);
@@ -514,6 +517,7 @@ class TodoApp {
         // Debounce search
         this.searchTimeout = setTimeout(() => {
             this.currentSearch = searchTerm.trim();
+            console.log('Executing search with term:', this.currentSearch);
             this.loadTasks();
         }, 300);
     }

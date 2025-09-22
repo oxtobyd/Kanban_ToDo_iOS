@@ -2876,6 +2876,15 @@ body[data-theme="dark"] .edit-note-textarea:focus {
         padding-right: env(safe-area-inset-right, 0px);
     }
     
+    /* Ensure import modal gets proper safe area positioning */
+    #importModal .modal-content {
+        top: env(safe-area-inset-top, 0px) !important;
+        padding-top: 0 !important;
+        padding-bottom: env(safe-area-inset-bottom, 0px) !important;
+        padding-left: env(safe-area-inset-left, 0px) !important;
+        padding-right: env(safe-area-inset-right, 0px) !important;
+    }
+    
     .modal-header {
         position: sticky;
         top: 0;
@@ -2886,6 +2895,12 @@ body[data-theme="dark"] .edit-note-textarea:focus {
         /* Ensure header is below safe area */
         margin-top: calc(-1 * env(safe-area-inset-top, 0px));
         padding-top: calc(15px + env(safe-area-inset-top, 0px));
+    }
+    
+    /* Ensure import modal header gets proper safe area handling */
+    #importModal .modal-header {
+        margin-top: 0 !important;
+        padding-top: 15px !important;
     }
     
     /* Dark mode support for sticky header */
@@ -4719,6 +4734,11 @@ body[data-theme="dark"] .subtask-item .subtask-text {
     background: #f3f4f6;
 }
 
+/* Dark mode override for subtask title hover */
+body[data-theme="dark"] .subtask-title:hover {
+    background: #374151 !important;
+}
+
 .delete-subtask-btn {
     background: none;
     border: none;
@@ -5380,6 +5400,43 @@ es badge styling */
         /* Ensure header is below safe area */
         margin-top: calc(-1 * env(safe-area-inset-top, 0px));
         padding-top: calc(15px + env(safe-area-inset-top, 0px));
+    }
+    
+    /* Mobile overrides for import modal */
+    #importModal .modal-content {
+        max-width: 100%;
+        width: 100%;
+        height: 100%;
+        max-height: 100vh;
+        border-radius: 0;
+        margin: 0;
+        transform: none;
+        top: 0;
+        left: 0;
+        position: fixed;
+        /* Add safe area insets to avoid protected areas */
+        padding-top: env(safe-area-inset-top, 20px);
+        padding-bottom: env(safe-area-inset-bottom, 0px);
+        padding-left: env(safe-area-inset-left, 0px);
+        padding-right: env(safe-area-inset-right, 0px);
+    }
+    
+    #importModal .modal-header {
+        position: sticky;
+        top: 0;
+        background: white;
+        z-index: 10;
+        border-bottom: 1px solid #e2e8f0;
+        padding: 15px 20px;
+        /* Ensure header is below safe area */
+        margin-top: calc(-1 * env(safe-area-inset-top, 0px));
+        padding-top: calc(15px + env(safe-area-inset-top, 0px));
+    }
+    
+    /* Dark mode support for import modal header */
+    body[data-theme="dark"] #importModal .modal-header {
+        background: rgba(15, 23, 42, 0.95);
+        border-bottom-color: #334155;
     }
     
     /* Dark mode support for sticky header */
