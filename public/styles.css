@@ -3922,8 +3922,9 @@ ing Reason Modal */
 }
 
 .subtasks-list.expanded {
-    max-height: 500px;
+    max-height: 1000px; /* Increase on desktop to fit long lists */
     opacity: 1;
+    overflow: visible; /* Ensure add-subtask row is reachable */
 }
 
 .subtask-item {
