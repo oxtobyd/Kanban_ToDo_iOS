@@ -4056,10 +4056,14 @@ body[data-theme="dark"] .subtask-item .subtask-text {
     gap: 6px;
     margin-top: 8px;
     align-items: center;
+    width: 100%;
+    flex-wrap: nowrap; /* prevent button from wrapping under input */
 }
 
 .add-subtask input {
-    flex: 1;
+    flex: 1 1 auto;
+    min-width: 0; /* allow flexbox to shrink input to avoid overflow */
+    box-sizing: border-box;
     border: 1px solid #e2e8f0;
     border-radius: 4px;
     padding: 4px 8px;
@@ -4073,14 +4077,16 @@ body[data-theme="dark"] .subtask-item .subtask-text {
 }
 
 .add-subtask button {
+    flex: 0 0 auto; /* keep button sized to content */
     background: #667eea;
     color: white;
     border: none;
     border-radius: 4px;
-    padding: 4px 8px;
-    font-size: 0.75rem;
+    padding: 4px 10px;
+    line-height: 1;
+    font-size: 0.9rem;
     cursor: pointer;
-    font-weight: 500;
+    font-weight: 600;
     transition: background 0.2s ease;
 }
 
@@ -4133,13 +4139,13 @@ body[data-theme="dark"] .subtask-item .subtask-text {
     }
     
     .subtasks-list.expanded {
-        max-height: 500px; /* Increased from 200px to allow more subtasks */
+        max-height: 800px; /* Increased to accommodate longer subtask lists */
         opacity: 1;
     }
     
     /* Ensure subtasks are visible when expanded on mobile */
     .subtasks-list[style*="display: block"] {
-        max-height: 500px !important;
+        max-height: 800px !important;
         opacity: 1 !important;
         overflow: visible !important;
     }
@@ -4179,7 +4185,7 @@ body[data-theme="dark"] .subtask-item .subtask-text {
     /* Make sure subtasks are properly visible when expanded */
     .subtasks-list.expanded,
     .subtasks-list[style*="display: block"] {
-        max-height: 500px !important;
+        max-height: 800px !important;
         opacity: 1 !important;
         overflow: visible !important;
     }
@@ -5184,6 +5190,28 @@ ark mode styling for add-subtask input to make it clearly visible */
     background: #6366f1 !important;
     color: #ffffff !important;
     border: 1px solid #6366f1 !important;
+}
+
+/* Ensure add-subtask input and + button stay on one line across all layouts */
+.subtasks-section .add-subtask {
+    display: grid;
+    grid-template-columns: 1fr auto; /* input grows, button auto-size */
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+}
+.subtasks-section .add-subtask input {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+}
+.subtasks-section .add-subtask .add-subtask-btn {
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
 }
 
 [data-theme="dark"] .add-subtask button:hover {
@@ -6269,4 +6297,37 @@ body[data-theme="dark"] .code-example {
     background: #334155;
     border-color: #475569;
     color: #a78bfa;
+}
+
+/* Force sub-task input and + button to stay on one line (desktop and mobile)
+   This block is deliberately placed at the end to win the cascade over
+   earlier duplicate .add-subtask definitions. */
+.task-card .subtasks-section .add-subtask,
+.task-card .subtasks-section .subtask-input-row {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) 20px !important; /* input grows, + fixed */
+    gap: 6px;
+    align-items: center;
+    width: 100%;
+}
+
+.task-card .subtasks-section .add-subtask input,
+.task-card .subtasks-section .subtask-input-row input {
+    min-width: 0 !important; /* allow shrink instead of wrapping the button */
+    width: 100%;
+    box-sizing: border-box;
+    padding: 4px 6px !important; /* compact so the + fits in narrow columns */
+    overflow: hidden; /* avoid growing due to placeholder text */
+}
+
+.task-card .subtasks-section .add-subtask .add-subtask-btn,
+.task-card .subtasks-section .subtask-input-row .add-subtask-btn {
+    width: 20px !important;
+    height: 20px !important;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    font-size: 16px;
 }

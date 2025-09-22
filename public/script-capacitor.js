@@ -335,8 +335,8 @@ class TodoApp {
             );
 
             // If user is typing and this isn't a forced refresh, skip the refresh
-            // BUT allow search input to trigger updates
-            const isSearchInput = activeElement && activeElement.id === 'searchInput';
+            // BUT allow search inputs (desktop and mobile) to trigger updates
+            const isSearchInput = activeElement && (activeElement.id === 'searchInput' || activeElement.id === 'mobileSearchInput');
             if (isTypingInInput && !forceRefresh && !isSearchInput) {
                 return;
             }
@@ -522,10 +522,23 @@ class TodoApp {
         }, 300);
     }
 
-    clearSearch() {
-        document.getElementById('searchInput').value = '';
+    async clearSearch() {
+        const input = document.getElementById('searchInput');
+        if (input) input.value = '';
         this.currentSearch = '';
-        this.loadTasks();
+
+        // Also reset the category selection to "All" so the UI highlights the All pill
+        this.currentCategoryTag = null;
+        this.currentIncludeTags = [];
+        try {
+            if (window.Capacitor && window.Capacitor.isNativePlatform() && window.Capacitor.Plugins?.Preferences) {
+                await window.Capacitor.Plugins.Preferences.set({ key: 'currentCategoryTag', value: '' });
+            } else {
+                localStorage.setItem('currentCategoryTag', '');
+            }
+        } catch (_) { }
+
+        await this.loadTasks();
     }
 
     async filterByIncludeTags(tags) {
@@ -837,10 +850,10 @@ class TodoApp {
                                 <button class="delete-subtask-btn" onclick="app.deleteSubtask(${subtask.id}); return false;" title="Delete">×</button>
                             </div>
                         `).join('')}
-                        <div class="add-subtask">
+                        <div class="add-subtask subtask-input-row">
                             <input type="text" id="new-subtask-${taskId}" placeholder="Add sub-task..." 
                                    onkeypress="if(event.key==='Enter') app.addSubtaskFromInput(${taskId})">
-                            <button onclick="app.addSubtaskFromInput(${taskId})" class="add-subtask-btn">Add</button>
+                            <button onclick="app.addSubtaskFromInput(${taskId})" class="add-subtask-btn" aria-label="Add subtask">+</button>
                         </div>
                     </div>
                 </div>
@@ -1903,7 +1916,11 @@ class TodoApp {
             if (this.currentTaskId) {
                 await window.RobustDataService.updateTask(this.currentTaskId, taskData);
             } else {
-                await window.RobustDataService.addTask(taskData);
+                const created = await window.RobustDataService.addTask(taskData);
+                // After creating a new task, default subtasks section to expanded
+                if (created && created.id != null) {
+                    this.ensureSubtasksExpanded(created.id);
+                }
             }
 
             await this.loadTags();
@@ -1930,7 +1947,7 @@ class TodoApp {
         await this.loadTasks();
     }
 
-    clearMobileFilters() {
+    async clearMobileFilters() {
         // Clear search
         const mobileSearchInput = document.getElementById('mobileSearchInput');
         if (mobileSearchInput) {
@@ -1952,8 +1969,18 @@ class TodoApp {
         }
         this.currentIncludeTags = [];
 
+        // Also reset category to All and persist the change so the All pill is highlighted
+        this.currentCategoryTag = null;
+        try {
+            if (window.Capacitor && window.Capacitor.isNativePlatform() && window.Capacitor.Plugins?.Preferences) {
+                await window.Capacitor.Plugins.Preferences.set({ key: 'currentCategoryTag', value: '' });
+            } else {
+                localStorage.setItem('currentCategoryTag', '');
+            }
+        } catch (_) { }
+
         this.updateFilterButtonIndicator();
-        this.loadTasks();
+        await this.loadTasks();
         this.hapticImpact('light');
     }
 
@@ -2012,6 +2039,27 @@ class TodoApp {
             this.expandedTasks.add(taskId);
             if (taskCard) taskCard.classList.add('expanded');
             if (expandBtn) expandBtn.classList.add('expanded');
+
+            // Also auto-expand the subtasks section for this task
+            this.ensureSubtasksExpanded(taskId);
+        }
+    }
+
+    // Ensure the subtasks list for a task is expanded and state remembered
+    ensureSubtasksExpanded(taskId) {
+        // Remember expansion state so re-render keeps it open
+        if (!this.expandedTasks.has(`subtasks-${taskId}`)) {
+            this.expandedTasks.add(`subtasks-${taskId}`);
+        }
+
+        // Update current DOM if present (no-op if not yet rendered)
+        const subtasksList = document.getElementById(`subtasks-${taskId}`);
+        const toggleIndicator = document.getElementById(`toggle-indicator-${taskId}`);
+        if (subtasksList && !subtasksList.classList.contains('expanded')) {
+            subtasksList.classList.add('expanded');
+        }
+        if (toggleIndicator) {
+            toggleIndicator.textContent = '▲';
         }
     }
 
