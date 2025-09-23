@@ -1243,6 +1243,27 @@ body[data-theme="dark"] .category-tab.active { background: #4f46e5; border-color
     min-width: 44px;
 }
 
+/* Mobile header Add button matches desktop style */
+.mobile-add-btn {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    padding: 8px;
+    border-radius: 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.mobile-add-btn:active { transform: scale(0.98); }
+
+body[data-theme="dark"] .mobile-add-btn {
+    background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+    color: #fff;
+}
+
 .add-task-btn:hover {
     transform: translateY(-2px);
     box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);

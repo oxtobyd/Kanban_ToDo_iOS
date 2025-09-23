@@ -16,6 +16,8 @@
     <link rel="shortcut icon" href="favicon.ico">
     
     <link rel="stylesheet" href="styles.css">
+    <!-- Supabase JS SDK (for optional Supabase sync) -->
+    <script defer src="https://unpkg.com/@supabase/supabase-js@2"></script>
 </head>
 <body>
     <div class="app">
@@ -71,6 +73,13 @@
                             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                             <polyline points="17,8 12,3 7,8"></polyline>
                             <line x1="12" y1="3" x2="12" y2="15"></line>
+                        </svg>
+                    </button>
+                    <!-- On small screens you may not see header buttons. Use mobile actions or add below: -->
+                    <button class="import-btn" onclick="app.openSyncSettings()" title="Sync Settings">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="3"></circle>
+                            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 8 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 3.6 15a1.65 1.65 0 0 0-1.51-1H2a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 3.6 8a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 8 3.6a1.65 1.65 0 0 0 1-1.51V2a2 2 0 1 1 4 0v.09A1.65 1.65 0 0 0 15 3.6a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 20.4 8a1.65 1.65 0 0 0 1.51 1H22a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
                         </svg>
                     </button>
                 </div>
@@ -304,6 +313,8 @@
     </div>
 
     <script src="script.js"></script>
+    <!-- Supabase adapter must load after script.js and robust iCloud adapter -->
+    <script src="supabase-sync.js"></script>
     <!-- PDF libs -->
     <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>

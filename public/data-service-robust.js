@@ -22,6 +22,15 @@ class RobustDataService {
         // Generate or retrieve device ID for conflict-free ID generation
         await this.initializeDeviceId();
         
+        // Ensure the desired sync provider (iCloud or Supabase) is selected before using it
+        try {
+            if (window.SyncSettings && typeof window.SyncSettings.selectProvider === 'function') {
+                await window.SyncSettings.selectProvider();
+            }
+        } catch (e) {
+            console.warn('Provider select failed or unavailable, continuing with default:', e?.message || e);
+        }
+        
         if (this.isCapacitor) {
             // Initialize robust iCloud sync
             if (window.RobustiCloudSync) {

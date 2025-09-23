@@ -1,19 +1,22 @@
 #!/bin/bash
+set -euo pipefail
 
-# Sync public directory to www directory for Capacitor
-echo "Syncing public/ to www/ for Capacitor..."
+echo "Syncing public/ → www/ for Capacitor..."
 
-# Copy updated files
-cp public/script-capacitor.js www/script.js
-cp public/data-service.js www/
-cp public/styles.css www/
-cp public/icloud-sync.js www/
+mkdir -p www
+
+# Mirror all assets from public to www, but we'll remap entrypoint and main script
+rsync -av --delete \
+  --exclude 'index.html' \
+  --exclude 'script.js' \
+  public/ www/
+
+# Map Capacitor-specific entry and script names
 cp public/index-capacitor.html www/index.html
+cp public/script-capacitor.js www/script.js
 
-echo "Files synced successfully!"
-echo "Running Capacitor sync..."
+echo "Files synced successfully! Running Capacitor sync..."
 
-# Sync with Capacitor
 npx cap sync ios
 
 echo "✅ Ready to test on iOS!"

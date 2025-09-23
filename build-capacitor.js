@@ -10,6 +10,7 @@ if (!fs.existsSync('www')) {
 const filesToCopy = [
     'index-capacitor.html',
     'script-capacitor.js',
+    'supabase-sync.js',
     'data-service-robust.js',
     'icloud-sync-robust.js',
     'sync-debug.js',

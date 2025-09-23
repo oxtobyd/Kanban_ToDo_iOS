@@ -59,6 +59,162 @@ class TodoApp {
         console.log('TodoApp initialized successfully');
     }
 
+    // Sync Settings UI
+    async openSyncSettings() {
+        const provider = await window.SyncSettings.get(window.SyncSettings.keys.provider) || 'icloud';
+        const supabaseUrl = await window.SyncSettings.get(window.SyncSettings.keys.supabaseUrl) || '';
+        const supabaseKey = await window.SyncSettings.get(window.SyncSettings.keys.supabaseAnonKey) || '';
+        const html = `
+            <div class="modal" id="syncSettingsModal">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h3>Sync Settings</h3>
+                  <button class="close-btn" onclick="app.closeSyncSettings()">&times;</button>
+                </div>
+                <div class="form-group">
+                  <label>Sync Provider</label>
+                  <select id="syncProvider">
+                    <option value="icloud" ${provider==='icloud'?'selected':''}>iCloud (default)</option>
+                    <option value="supabase" ${provider==='supabase'?'selected':''}>Supabase</option>
+                  </select>
+                </div>
+                <div id="supabaseFields" style="${provider==='supabase'?'':'display:none;'}">
+                  <div class="form-group">
+                    <label>Supabase URL</label>
+                    <input type="text" id="supabaseUrl" value="${supabaseUrl}" placeholder="https://YOUR-PROJECT.supabase.co">
+                  </div>
+                  <div class="form-group">
+                    <label>Supabase anon key</label>
+                    <input type="password" id="supabaseAnonKey" value="${supabaseKey}" placeholder="Paste anon public key">
+                  </div>
+                  <div class="form-help">Users must create their own Supabase project and paste credentials here. Data syncs per user project.</div>
+                </div>
+                <div class="form-actions">
+                  <button type="button" onclick="app.openSyncHelp()">Help</button>
+                  <span style="flex:1"></span>
+                  <button type="button" onclick="app.closeSyncSettings()">Cancel</button>
+                  <button type="button" onclick="app.saveSyncSettings()">Save</button>
+                </div>
+              </div>
+            </div>`;
+        const container = document.createElement('div');
+        container.innerHTML = html;
+        document.body.appendChild(container.firstElementChild);
+        const select = document.getElementById('syncProvider');
+        select.addEventListener('change', () => {
+            const v = select.value;
+            document.getElementById('supabaseFields').style.display = v === 'supabase' ? '' : 'none';
+        });
+    }
+
+    closeSyncSettings() {
+        const modal = document.getElementById('syncSettingsModal');
+        if (modal) modal.remove();
+    }
+
+    openSyncHelp() {
+        const html = `
+            <div class="modal" id="syncHelpModal">
+              <div class="modal-content">
+                <style>
+                  #syncHelpModal .modal-content{max-width:760px;}
+                  #syncHelpModal .help-body{line-height:1.6;padding:12px 16px;}
+                  #syncHelpModal .help-body h4{margin:10px 0 6px;}
+                  #syncHelpModal .help-body ul,#syncHelpModal .help-body ol{padding-left:22px;margin:6px 0 12px;}
+                  #syncHelpModal pre{white-space:pre-wrap;font-size:12px;border-radius:8px;padding:12px;border:1px solid;}
+                  @media (prefers-color-scheme: dark){
+                    #syncHelpModal .help-body{color:#e5e7eb;}
+                    #syncHelpModal pre{background:#0b1220;border-color:#1f2a44;color:#e5e7eb;}
+                  }
+                  @media (prefers-color-scheme: light){
+                    #syncHelpModal .help-body{color:#1f2937;}
+                    #syncHelpModal pre{background:#f8fafc;border-color:#e2e8f0;color:#0f172a;}
+                  }
+                  /* Force app dark theme colors (mobile/web consistency) */
+                  body[data-theme="dark"] #syncHelpModal .help-body,
+                  body[data-theme="dark"] #syncHelpModal .help-body p,
+                  body[data-theme="dark"] #syncHelpModal .help-body li,
+                  body[data-theme="dark"] #syncHelpModal .help-body ol,
+                  body[data-theme="dark"] #syncHelpModal .help-body ul,
+                  body[data-theme="dark"] #syncHelpModal .help-body h4 { color:#e5e7eb !important; }
+                  body[data-theme="dark"] #syncHelpModal pre{ background:#0f172a !important; border-color:#334155 !important; color:#e5e7eb !important; }
+                </style>
+                <div class="modal-header">
+                  <h3>Sync Setup Help</h3>
+                  <button class="close-btn" onclick="app.closeSyncHelp()">&times;</button>
+                </div>
+                <div class="help-body">
+                  <div class="form-group">
+                    <h4>iCloud (default)</h4>
+                    <ul>
+                      <li>Sign into iCloud on your device and enable iCloud Drive.</li>
+                      <li>The app stores a single JSON value under a fixed key and syncs changes.</li>
+                    </ul>
+                  </div>
+                  <div class="form-group">
+                    <h4>Supabase (realtime)</h4>
+                    <div style="margin:6px 0;">Set up once in your Supabase project, then paste the URL and anon key in Sync Settings.</div>
+                    <ol>
+                      <li>Create (or open) a Supabase project.</li>
+                      <li>Find your URL and anon key: <strong>Project Home → Project API</strong> → copy the <em>Project URL</em> and <em>API/anon public key</em> from the client snippet.</li>
+                      <li>In this app, open Sync Settings, select Supabase, and paste the URL and key.</li>
+                      <li>Run this SQL once in Supabase (SQL editor) to enable storage and realtime:</li>
+                    </ol>
+                    <pre>create table if not exists public.kanban_sync (
+  id text primary key,
+  data jsonb not null,
+  updated_at timestamptz default now()
+);
+alter publication supabase_realtime add table public.kanban_sync;
+alter table public.kanban_sync enable row level security;
+create policy if not exists kanban_sync_select_all on public.kanban_sync for select using (true);
+create policy if not exists kanban_sync_insert_single_row on public.kanban_sync for insert with check (id = 'kanban-data');
+create policy if not exists kanban_sync_update_single_row on public.kanban_sync for update using (id = 'kanban-data');
+grant usage on schema public to anon;
+grant select, insert, update on public.kanban_sync to anon;
+</pre>
+                    <ul>
+                      <li>After this, saves push to Supabase and other devices receive realtime updates.</li>
+                    </ul>
+                  </div>
+                </div>
+                <div class="form-actions" style="padding:0 16px 12px;">
+                  <button type="button" onclick="app.closeSyncHelp()">Close</button>
+                </div>
+              </div>
+            </div>`;
+        const container = document.createElement('div');
+        container.innerHTML = html;
+        document.body.appendChild(container.firstElementChild);
+    }
+
+    closeSyncHelp() {
+        const modal = document.getElementById('syncHelpModal');
+        if (modal) modal.remove();
+    }
+
+    async saveSyncSettings() {
+        const provider = document.getElementById('syncProvider').value;
+        await window.SyncSettings.set(window.SyncSettings.keys.provider, provider);
+        if (provider === 'supabase') {
+            const url = document.getElementById('supabaseUrl').value.trim();
+            const key = document.getElementById('supabaseAnonKey').value.trim();
+            await window.SyncSettings.set(window.SyncSettings.keys.supabaseUrl, url);
+            await window.SyncSettings.set(window.SyncSettings.keys.supabaseAnonKey, key);
+        }
+        this.closeSyncSettings();
+        // Re-select provider and re-init adapter
+        if (window.SyncSettings?.selectProvider) {
+            await window.SyncSettings.selectProvider();
+        }
+        // After switching to Supabase/iCloud, prefer pulling latest from cloud on new devices
+        // to avoid overwriting remote data with empty local state.
+        if (window.RobustDataService?.manualSync) {
+            try { await window.RobustDataService.manualSync(); } catch (_) {}
+        }
+        alert('Sync settings saved.');
+    }
+
     async loadTasks(priority = null, sortBy = null, search = null, includeTags = null, excludeTags = null) {
         try {
             // Use provided values or keep current state

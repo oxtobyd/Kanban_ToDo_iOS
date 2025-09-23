@@ -19,6 +19,8 @@
     <link rel="shortcut icon" href="favicon.ico">
     
     <link rel="stylesheet" href="styles.css">
+    <!-- Supabase JS SDK (optional Supabase sync) -->
+    <script defer src="https://unpkg.com/@supabase/supabase-js@2"></script>
 </head>
 <body>
     <div class="app" role="application">
@@ -40,6 +42,12 @@
                 <button class="mobile-theme-btn" id="mobileThemeToggleBtn" onclick="app.toggleTheme()" aria-label="Toggle theme" title="Toggle theme">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                    </svg>
+                </button>
+                <button class="mobile-add-btn" onclick="app.openTaskModal()" aria-label="Add Task" title="Add Task">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="12" y1="5" x2="12" y2="19"></line>
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
                     </svg>
                 </button>
                 <button class="mobile-menu-btn" onclick="app.openMobileActions()" aria-label="Menu">
@@ -99,6 +107,7 @@
                             <line x1="12" y1="15" x2="12" y2="3"></line>
                         </svg>
                     </button>
+
                     <button class="import-btn" onclick="app.openImportModal()" title="Import Data">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
@@ -120,6 +129,12 @@
                         </svg>
                     </button>
                 </div>
+                <button class="import-btn" onclick="app.openSyncSettings()" title="Sync Settings">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="3"></circle>
+                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 8 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 3.6 15a1.65 1.65 0 0 0-1.51-1H2a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 3.6 8a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 8 3.6a1.65 1.65 0 0 0 1-1.51V2a2 2 0 1 1 4 0v.09A1.65 1.65 0 0 0 15 3.6a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 20.4 8a1.65 1.65 0 0 0 1.51 1H22a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                    </svg>
+                </button>
                 <button class="add-task-btn" onclick="app.openTaskModal()" title="Add Task">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <line x1="12" y1="5" x2="12" y2="19"></line>
@@ -238,8 +253,7 @@
         </button>
     </div>
 
-    <!-- Mobile floating Add Task button -->
-    <button class="mobile-fab" id="mobileFab" style="display:none;" onclick="app.openTaskModal()" aria-label="Add Task" title="Add Task">+</button>
+    
 
     <!-- Mobile Search Overlay -->
     <div class="mobile-overlay" id="mobileSearch" style="display:none;">
@@ -280,6 +294,7 @@
             <button class="ma-item" onclick="app.exportData()">Export Data</button>
             <button class="ma-item" onclick="app.openImportModal()">Import Data</button>
             <button class="ma-item" onclick="app.openHelpModal()">Help & Guide</button>
+            <button class="ma-item" onclick="app.openSyncSettings()">Sync Settings</button>
             <button class="ma-item ma-cancel" onclick="app.closeMobileActions()">Cancel</button>
         </div>
     </div>
@@ -383,6 +398,8 @@
     
     <!-- Robust iCloud Sync Service (Apple standard) -->
     <script src="icloud-sync-robust.js"></script>
+    <!-- Supabase adapter must load before data-service so provider is selected prior to init -->
+    <script src="supabase-sync.js"></script>
     
     <!-- Robust Data Service -->
     <script src="data-service-robust.js"></script>

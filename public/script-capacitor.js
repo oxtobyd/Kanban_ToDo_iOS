@@ -1,4 +1,3 @@
-
 class TodoApp {
     constructor() {
         this.tasks = [];
@@ -170,6 +169,121 @@ class TodoApp {
             `;
             document.head.appendChild(style);
         }
+    }
+
+    // Sync Settings UI (Capacitor build)
+    async openSyncSettings() {
+        // Close mobile actions menu if open
+        try { this.closeMobileActions(); } catch (_) {}
+        const getPref = async (key, fallback = '') => {
+            try {
+                if (window.Capacitor?.Plugins?.Preferences) {
+                    const res = await window.Capacitor.Plugins.Preferences.get({ key });
+                    return (res && res.value) || fallback;
+                }
+            } catch (_) {}
+            try { return localStorage.getItem(key) || fallback; } catch (_) { return fallback; }
+        };
+        const provider = await getPref('sync_provider', 'icloud');
+        const supabaseUrl = await getPref('supabase_url', '');
+        const supabaseKey = await getPref('supabase_anon_key', '');
+        const html = `
+            <div class="modal" id="syncSettingsModal">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h3>Sync Settings</h3>
+                  <button class="close-btn" onclick="app.closeSyncSettings()">&times;</button>
+                </div>
+                <div class="form-group">
+                  <label>Sync Provider</label>
+                  <select id="syncProvider">
+                    <option value="icloud" ${provider==='icloud'?'selected':''}>iCloud (default)</option>
+                    <option value="supabase" ${provider==='supabase'?'selected':''}>Supabase</option>
+                  </select>
+                </div>
+                <div id="supabaseFields" style="${provider==='supabase'?'':'display:none;'}">
+                  <div class="form-group">
+                    <label>Supabase URL</label>
+                    <input type="text" id="supabaseUrl" value="${supabaseUrl}" placeholder="https://YOUR-PROJECT.supabase.co">
+                  </div>
+                  <div class="form-group">
+                    <label>Supabase anon key</label>
+                    <input type="password" id="supabaseAnonKey" value="${supabaseKey}" placeholder="Paste anon public key">
+                  </div>
+                </div>
+                <div class="form-actions">
+                  <button type="button" onclick="app.openSyncHelp()">Help</button>
+                  <span style="flex:1"></span>
+                  <button type="button" onclick="app.closeSyncSettings()">Cancel</button>
+                  <button type="button" onclick="app.saveSyncSettings()">Save</button>
+                </div>
+              </div>
+            </div>`;
+        const container = document.createElement('div');
+        container.innerHTML = html;
+        const modalEl = container.firstElementChild;
+        document.body.appendChild(modalEl);
+        // Ensure modal is visible (global CSS defaults modals to display:none)
+        try { modalEl.style.display = 'block'; } catch (_) {}
+        const select = document.getElementById('syncProvider');
+        select.addEventListener('change', () => {
+            const v = select.value;
+            document.getElementById('supabaseFields').style.display = v === 'supabase' ? '' : 'none';
+        });
+    }
+
+    closeSyncSettings() {
+        const modal = document.getElementById('syncSettingsModal');
+        if (modal) modal.remove();
+    }
+
+    openSyncHelp() {
+        const html = `
+            <div class=\"modal\" id=\"syncHelpModal\">\n              <div class=\"modal-content\">\n                <style>\n                  #syncHelpModal .modal-content{max-width:760px;}\n                  #syncHelpModal .help-body{line-height:1.6;padding:12px 16px;}\n                  #syncHelpModal .help-body h4{margin:10px 0 6px;}\n                  #syncHelpModal .help-body ul,#syncHelpModal .help-body ol{padding-left:22px;margin:6px 0 12px;}\n                  #syncHelpModal pre{white-space:pre-wrap;font-size:12px;border-radius:8px;padding:12px;border:1px solid;}\n                  @media (prefers-color-scheme: dark){\n                    #syncHelpModal .help-body{color:#e5e7eb;}\n                    #syncHelpModal pre{background:#0b1220;border-color:#1f2a44;color:#e5e7eb;}\n                  }\n                  @media (prefers-color-scheme: light){\n                    #syncHelpModal .help-body{color:#1f2937;}\n                    #syncHelpModal pre{background:#f8fafc;border-color:#e2e8f0;color:#0f172a;}\n                  }\n                </style>\n                <style>\n                  /* Force app dark theme (Capacitor) to match desktop */\n                  body[data-theme=\"dark\"] #syncHelpModal .help-body,\n                  body[data-theme=\"dark\"] #syncHelpModal .help-body p,\n                  body[data-theme=\"dark\"] #syncHelpModal .help-body li,\n                  body[data-theme=\"dark\"] #syncHelpModal .help-body ol,\n                  body[data-theme=\"dark\"] #syncHelpModal .help-body ul,\n                  body[data-theme=\"dark\"] #syncHelpModal .help-body h4 { color:#e5e7eb !important; }\n                  body[data-theme=\"dark\"] #syncHelpModal pre{ background:#0f172a !important; border-color:#334155 !important; color:#e5e7eb !important; }\n                </style>\n                <div class=\"modal-header\">
+                  <h3>Sync Setup Help</h3>
+                  <button class=\"close-btn\" onclick=\"app.closeSyncHelp()\">&times;</button>
+                </div>\n                <div class=\"help-body\">
+                  <div class=\"form-group\">
+                    <h4>iCloud (default)</h4>\n                    <ul>\n                      <li>Sign into iCloud on your device/simulator and enable iCloud Drive.</li>\n                      <li>The app stores a single JSON value under a fixed key and syncs changes.</li>\n                    </ul>\n                  </div>\n                  <div class=\"form-group\">\n                    <h4>Supabase (realtime)</h4>\n                    <div style=\"margin:6px 0;\">Set up once in your Supabase project, then paste the URL and anon key in Sync Settings.</div>\n                    <ol>\n                      <li>Create (or open) a Supabase project.</li>\n                      <li>Find your URL and anon key: <strong>Project Home → Project API</strong> → copy the <em>Project URL</em> and <em>API/anon public key</em> from the client snippet.</li>\n                      <li>In this app, open Sync Settings, select Supabase, and paste the URL and key.</li>\n                      <li>Run this SQL once in Supabase (SQL editor) to enable storage and realtime:</li>\n                    </ol>\n                    <pre>create table if not exists public.kanban_sync (\n  id text primary key,\n  data jsonb not null,\n  updated_at timestamptz default now()\n);\nalter publication supabase_realtime add table public.kanban_sync;\nalter table public.kanban_sync enable row level security;\ncreate policy if not exists kanban_sync_select_all on public.kanban_sync for select using (true);\ncreate policy if not exists kanban_sync_insert_single_row on public.kanban_sync for insert with check (id = 'kanban-data');\ncreate policy if not exists kanban_sync_update_single_row on public.kanban_sync for update using (id = 'kanban-data');\ngrant usage on schema public to anon;\ngrant select, insert, update on public.kanban_sync to anon;\n</pre>\n                    <ul>\n                      <li>After this, saves push to Supabase and other devices receive realtime updates.</li>\n                    </ul>\n                  </div>\n                </div>\n                <div class=\"form-actions\" style=\"padding:0 16px 12px;\">\n                  <button type=\"button\" onclick=\"app.closeSyncHelp()\">Close</button>\n                </div>\n              </div>\n            </div>`;
+        const container = document.createElement('div');
+        container.innerHTML = html;
+        const modalEl = container.firstElementChild;
+        document.body.appendChild(modalEl);
+        try { modalEl.style.display = 'block'; } catch (_) {}
+    }
+
+    closeSyncHelp() {
+        const modal = document.getElementById('syncHelpModal');
+        if (modal) modal.remove();
+    }
+
+    async saveSyncSettings() {
+        const setPref = async (key, value) => {
+            try {
+                if (window.Capacitor?.Plugins?.Preferences) {
+                    await window.Capacitor.Plugins.Preferences.set({ key, value: value ?? '' });
+                    return;
+                }
+            } catch (_) {}
+            try { localStorage.setItem(key, value ?? ''); } catch (_) {}
+        };
+        const provider = document.getElementById('syncProvider').value;
+        await setPref('sync_provider', provider);
+        if (provider === 'supabase') {
+            const url = document.getElementById('supabaseUrl').value.trim();
+            const key = document.getElementById('supabaseAnonKey').value.trim();
+            await setPref('supabase_url', url);
+            await setPref('supabase_anon_key', key);
+        }
+        this.closeSyncSettings();
+        if (window.SyncSettings?.selectProvider) {
+            await window.SyncSettings.selectProvider();
+        }
+        // On a fresh device, pull from cloud immediately to hydrate local state
+        if (window.RobustDataService?.manualSync) {
+            try { await window.RobustDataService.manualSync(); } catch (_) {}
+        }
+        try { alert('Sync settings saved.'); } catch (_) {}
     }
 
     toggleTheme() {
@@ -3655,8 +3769,18 @@ class TodoApp {
             console.log('=== MANUAL SYNC TRIGGERED ===');
             console.log('Current notes before sync:', window.RobustDataService.notes.length);
             console.log('Deleted notes before sync:', window.RobustDataService.notes.filter(n => n.deleted).length);
+            // If Supabase is selected, delegate to central data service and skip iCloud path
+            try {
+                const provider = await window.SyncSettings?.get?.(window.SyncSettings?.keys?.provider);
+                if (provider === 'supabase') {
+                    if (window.RobustDataService?.manualSync) {
+                        await window.RobustDataService.manualSync();
+                        return;
+                    }
+                }
+            } catch (_) {}
 
-            this.showNotification('Syncing with iCloud...', 'info');
+            this.showNotification('Syncing...', 'info');
 
             // Force fresh iCloud read by bypassing cache
             console.log('Manual sync: Forcing fresh iCloud read...');
@@ -4313,10 +4437,10 @@ class TodoApp {
             </div>
 
             <div class="help-section">
-                <h4>☁️ iCloud Sync</h4>
+                <h4>☁️ iCloud/Supabase Sync</h4>
                 <p>Your data syncs automatically across all your Apple devices:</p>
                 <ul>
-                    <li><strong>Automatic Sync:</strong> Changes sync automatically via iCloud</li>
+                    <li><strong>Automatic Sync:</strong> Changes sync automatically via iCloud/Supabase</li>
                     <li><strong>Manual Sync:</strong> Tap "Sync Now" to force immediate sync</li>
                     <li><strong>Cross-Device:</strong> Changes appear on all devices within minutes</li>
                     <li><strong>Offline Support:</strong> Works offline, syncs when connected</li>
