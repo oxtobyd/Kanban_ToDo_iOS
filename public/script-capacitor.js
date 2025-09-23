@@ -3170,6 +3170,29 @@ class TodoApp {
 
     openCSVImportModal() {
         this.closeImportOptionsModal();
+        // Reset any previous CSV selection/state so user starts clean
+        this.csvFile = null;
+        this.csvData = null;
+        this.csvHeaders = null;
+
+        const fileInput = document.getElementById('csvFileInput');
+        if (fileInput) fileInput.value = '';
+
+        const selectedFile = document.getElementById('csvSelectedFile');
+        const fileUpload = document.getElementById('csvFileUpload');
+        if (selectedFile) selectedFile.style.display = 'none';
+        if (fileUpload) fileUpload.style.display = 'block';
+
+        // Ensure step 1 (file select) is shown and field mapping step hidden
+        const step1 = document.getElementById('step1');
+        const step2 = document.getElementById('step2');
+        if (step1) step1.style.display = 'block';
+        if (step2) step2.style.display = 'none';
+
+        // Reset any existing field mapping selects if present
+        const mappingSelects = document.querySelectorAll('.field-mapping-select');
+        mappingSelects.forEach(sel => { try { sel.selectedIndex = 0; } catch (_) {} });
+
         const modal = document.getElementById('csvImportModal');
         modal.style.display = 'block';
     }
@@ -5171,9 +5194,11 @@ class TodoApp {
         
         const selectedFile = document.getElementById('csvSelectedFile');
         const fileUpload = document.getElementById('csvFileUpload');
+        const fileInput = document.getElementById('csvFileInput');
         
         selectedFile.style.display = 'none';
         fileUpload.style.display = 'block';
+        if (fileInput) fileInput.value = '';
     }
 
     async parseCSVFile(file) {
