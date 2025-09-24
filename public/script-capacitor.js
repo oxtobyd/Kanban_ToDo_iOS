@@ -184,7 +184,7 @@ class TodoApp {
             } catch (_) {}
             try { return localStorage.getItem(key) || fallback; } catch (_) { return fallback; }
         };
-        const provider = await getPref('sync_provider', 'icloud');
+        const provider = await getPref('sync_provider', 'none');
         const supabaseUrl = await getPref('supabase_url', '');
         const supabaseKey = await getPref('supabase_anon_key', '');
         const html = `
@@ -197,7 +197,8 @@ class TodoApp {
                 <div class="form-group">
                   <label>Sync Provider</label>
                   <select id="syncProvider">
-                    <option value="icloud" ${provider==='icloud'?'selected':''}>iCloud (default)</option>
+                    <option value="none" ${provider==='none'?'selected':''}>No Sync (default)</option>
+                    <option value="icloud" ${provider==='icloud'?'selected':''}>iCloud</option>
                     <option value="supabase" ${provider==='supabase'?'selected':''}>Supabase</option>
                   </select>
                 </div>
@@ -211,8 +212,17 @@ class TodoApp {
                     <input type="password" id="supabaseAnonKey" value="${supabaseKey}" placeholder="Paste anon public key">
                   </div>
                 </div>
+                <div id="testSyncSection" style="${provider==='none'?'display:none;':''}">
+                  <div class="form-group">
+                    <button type="button" id="testSyncBtn" style="background:#10b981;color:#fff;border:none;padding:8px 16px;border-radius:6px;width:100%;" onclick="app.testSyncConnection()">
+                      Test Connection
+                    </button>
+                    <div id="testResult" style="margin-top:8px;padding:8px;border-radius:4px;display:none;"></div>
+                  </div>
+                </div>
                 <div class="form-actions">
                   <button type="button" onclick="app.openSyncHelp()">Help</button>
+                  <button type="button" style="margin-left:8px;background:#ef4444;color:#fff;border:none;padding:8px 10px;border-radius:6px;" title="Clear cloud store (provider-dependent)" onclick="app.clearCloudData()">Clear Cloud Data</button>
                   <span style="flex:1"></span>
                   <button type="button" onclick="app.closeSyncSettings()">Cancel</button>
                   <button type="button" onclick="app.saveSyncSettings()">Save</button>
@@ -229,12 +239,82 @@ class TodoApp {
         select.addEventListener('change', () => {
             const v = select.value;
             document.getElementById('supabaseFields').style.display = v === 'supabase' ? '' : 'none';
+            document.getElementById('testSyncSection').style.display = v === 'none' ? 'none' : '';
+            // Clear previous test results when switching providers
+            const testResult = document.getElementById('testResult');
+            if (testResult) {
+                testResult.style.display = 'none';
+                testResult.innerHTML = '';
+            }
         });
+        
+        // Apply dropdown fix to prevent focus issues
+        this.fixDropdown(select);
     }
 
     closeSyncSettings() {
         const modal = document.getElementById('syncSettingsModal');
         if (modal) modal.remove();
+    }
+
+    async clearCloudData() {
+        try {
+            const provider = await (async () => {
+                try {
+                    if (window.Capacitor?.Plugins?.Preferences) {
+                        const res = await window.Capacitor.Plugins.Preferences.get({ key: 'sync_provider' });
+                        return (res && res.value) || 'icloud';
+                    }
+                } catch (_) {}
+                try { return localStorage.getItem('sync_provider') || 'icloud'; } catch (_) { return 'icloud'; }
+            })();
+
+            if (!confirm(`This will clear data in ${provider === 'supabase' ? 'Supabase' : 'iCloud'} for this app. Continue?`)) return;
+
+            if (provider === 'supabase') {
+                // RLS typically blocks delete for anon; do an explicit empty upsert instead
+                if (window.RobustiCloudSync?.client) {
+                    await window.RobustiCloudSync.client.from('kanban_sync').upsert({
+                        id: 'kanban-data',
+                        data: { tasks: [], notes: [], subtasks: [], nextTaskId: 1, nextNoteId: 1, nextSubtaskId: 1, lastSync: new Date().toISOString() }
+                    }, { onConflict: 'id' });
+                } else {
+                    alert('Supabase client not initialized. Save settings first.');
+                    return;
+                }
+            } else {
+                // iCloud: write empty payload via adapter
+                const empty = { tasks: [], notes: [], subtasks: [], nextTaskId: 1, nextNoteId: 1, nextSubtaskId: 1, lastSync: new Date().toISOString() };
+                if (window.RobustiCloudSync?.saveToiCloud) {
+                    await window.RobustiCloudSync.saveToiCloud(empty);
+                } else {
+                    alert('iCloud adapter not available. Save settings first.');
+                    return;
+                }
+            }
+
+            // Clear local in-memory data and persist locally
+            if (window.RobustDataService) {
+                window.RobustDataService.tasks = [];
+                window.RobustDataService.notes = [];
+                window.RobustDataService.subtasks = [];
+                window.RobustDataService.nextTaskId = 1;
+                window.RobustDataService.nextNoteId = 1;
+                window.RobustDataService.nextSubtaskId = 1;
+                window.RobustDataService.lastSyncTime = new Date().toISOString();
+                await window.RobustDataService.saveToLocalStorage?.();
+                // Pull from cloud to ensure UI hydrates to the cleared state and subscribe updates
+                if (window.RobustDataService.manualSync) {
+                    await window.RobustDataService.manualSync();
+                }
+                // Refresh UI
+                await this.loadTasks();
+                this.showNotification(`${provider === 'supabase' ? 'Supabase' : 'iCloud'} store cleared.`, 'success');
+            }
+        } catch (error) {
+            console.error('Clear cloud data failed:', error);
+            this.showNotification('Failed to clear cloud data: ' + (error?.message || 'Unknown error'), 'error');
+        }
     }
 
     openSyncHelp() {
@@ -284,6 +364,169 @@ class TodoApp {
             try { await window.RobustDataService.manualSync(); } catch (_) {}
         }
         try { alert('Sync settings saved.'); } catch (_) {}
+    }
+
+    async testSyncConnection() {
+        const provider = document.getElementById('syncProvider').value;
+        const testBtn = document.getElementById('testSyncBtn');
+        const testResult = document.getElementById('testResult');
+        
+        // Show loading state
+        testBtn.disabled = true;
+        testBtn.innerHTML = 'Testing...';
+        testResult.style.display = 'none';
+        
+        try {
+            let result;
+            
+            if (provider === 'icloud') {
+                result = await this.testiCloudConnection();
+            } else if (provider === 'supabase') {
+                result = await this.testSupabaseConnection();
+            } else {
+                throw new Error('No sync provider selected');
+            }
+            
+            // Show success result
+            testResult.style.display = 'block';
+            testResult.style.backgroundColor = '#dcfce7';
+            testResult.style.color = '#166534';
+            testResult.style.border = '1px solid #bbf7d0';
+            testResult.innerHTML = `✅ ${result}`;
+            
+        } catch (error) {
+            // Show error result
+            testResult.style.display = 'block';
+            testResult.style.backgroundColor = '#fef2f2';
+            testResult.style.color = '#dc2626';
+            testResult.style.border = '1px solid #fecaca';
+            testResult.innerHTML = `❌ ${error.message}`;
+        } finally {
+            // Reset button
+            testBtn.disabled = false;
+            testBtn.innerHTML = 'Test Connection';
+        }
+    }
+
+    async testiCloudConnection() {
+        if (!window.Capacitor || !window.Capacitor.isNativePlatform()) {
+            throw new Error('iCloud sync is only available on iOS devices');
+        }
+        
+        try {
+            // Create a temporary iCloud service instance for testing (don't interfere with active sync)
+            const testiCloudService = new RobustiCloudSyncService();
+            await testiCloudService.init();
+            
+            // Test if iCloud is available
+            const availability = await testiCloudService.checkiCloudAvailability();
+            if (!availability.available) {
+                throw new Error(`iCloud is not available: ${availability.reason}`);
+            }
+            
+            // Test reading from iCloud
+            const testData = await testiCloudService.loadFromiCloud();
+            
+            // Test writing to iCloud (with a small test object)
+            const testObject = {
+                test: true,
+                timestamp: new Date().toISOString(),
+                deviceId: await window.RobustDataService?.getDeviceId?.() || 'unknown'
+            };
+            
+            await testiCloudService.saveToiCloud(testObject);
+            
+            return 'iCloud connection successful! Sync is working properly.';
+            
+        } catch (error) {
+            if (error.message.includes('not available')) {
+                throw new Error('iCloud is not available. Please check your iCloud settings and make sure you\'re signed in.');
+            } else if (error.message.includes('account')) {
+                throw new Error('iCloud account issue. Please check your iCloud settings.');
+            } else if (error.message.includes('not loaded')) {
+                throw new Error('iCloud sync service is not loaded. Please refresh the app and try again.');
+            } else {
+                throw new Error(`iCloud connection failed: ${error.message}`);
+            }
+        }
+    }
+
+    async testSupabaseConnection() {
+        const url = document.getElementById('supabaseUrl').value.trim();
+        const key = document.getElementById('supabaseAnonKey').value.trim();
+        
+        if (!url || !key) {
+            throw new Error('Please enter both Supabase URL and anon key');
+        }
+        
+        if (!url.startsWith('https://') || !url.includes('.supabase.co')) {
+            throw new Error('Invalid Supabase URL format. Should be: https://your-project.supabase.co');
+        }
+        
+        try {
+            // Load Supabase SDK if not already loaded
+            if (!window.supabase) {
+                await new Promise((resolve, reject) => {
+                    const script = document.createElement('script');
+                    script.src = 'https://unpkg.com/@supabase/supabase-js@2';
+                    script.onload = () => resolve();
+                    script.onerror = () => reject(new Error('Failed to load Supabase SDK'));
+                    document.head.appendChild(script);
+                });
+            }
+            
+            // Create Supabase client with the test credentials
+            const supabase = window.supabase.createClient(url, key);
+            
+            // Test connection by trying to read from the sync table
+            const { data, error } = await supabase
+                .from('kanban_sync')
+                .select('id, data, updated_at')
+                .eq('id', 'kanban-data')
+                .maybeSingle();
+            
+            if (error) {
+                if (error.message.includes('relation') || error.message.includes('does not exist')) {
+                    throw new Error('Supabase table not found. Please run the database setup first.');
+                } else if (error.message.includes('permission') || error.message.includes('auth')) {
+                    throw new Error('Permission denied. Please check your anon key and RLS policies.');
+                } else {
+                    throw new Error(`Database error: ${error.message}`);
+                }
+            }
+            
+            // Test writing (create/update a test record)
+            const testData = {
+                id: 'test_connection',
+                data: { test: true, timestamp: new Date().toISOString(), lastSync: new Date().toISOString() },
+                updated_at: new Date().toISOString()
+            };
+            
+            const { error: insertError } = await supabase
+                .from('kanban_sync')
+                .upsert(testData, { onConflict: 'id' });
+            
+            if (insertError) {
+                throw new Error(`Write test failed: ${insertError.message}`);
+            }
+            
+            // Clean up test record
+            await supabase
+                .from('kanban_sync')
+                .delete()
+                .eq('id', 'test_connection');
+            
+            return 'Supabase connection successful! Database access and sync are working properly.';
+            
+        } catch (error) {
+            if (error.message.includes('Failed to fetch') || error.message.includes('network')) {
+                throw new Error('Network error. Please check your internet connection and Supabase URL.');
+            } else if (error.message.includes('Invalid API key')) {
+                throw new Error('Invalid anon key. Please check your Supabase anon key.');
+            } else {
+                throw new Error(`Supabase connection failed: ${error.message}`);
+            }
+        }
     }
 
     toggleTheme() {
@@ -1389,42 +1632,12 @@ class TodoApp {
             if (this.isDragging) e.preventDefault();
         });
 
-        // Fix dropdown focus issues for all select elements
-        const fixDropdown = (selectElement) => {
-            if (!selectElement) return;
-            
-            // Prevent event propagation that might interfere with dropdown
-            selectElement.addEventListener('mousedown', (e) => {
-                e.stopPropagation();
-            });
-            selectElement.addEventListener('click', (e) => {
-                e.stopPropagation();
-            });
-            selectElement.addEventListener('focus', (e) => {
-                e.stopPropagation();
-            });
-            selectElement.addEventListener('blur', (e) => {
-                e.stopPropagation();
-            });
-            
-            // Reset dropdown state on each click to prevent it getting stuck
-            selectElement.addEventListener('click', (e) => {
-                // Blur and refocus to reset the dropdown state
-                setTimeout(() => {
-                    selectElement.blur();
-                    setTimeout(() => {
-                        selectElement.focus();
-                    }, 10);
-                }, 10);
-            });
-        };
-
         // Apply fix to all dropdowns
-        fixDropdown(document.getElementById('sortBy'));
-        fixDropdown(document.getElementById('taskPriority'));
-        fixDropdown(document.getElementById('taskStatus'));
-        fixDropdown(document.getElementById('mobilePriority'));
-        fixDropdown(document.getElementById('mobileTag'));
+        this.fixDropdown(document.getElementById('sortBy'));
+        this.fixDropdown(document.getElementById('taskPriority'));
+        this.fixDropdown(document.getElementById('taskStatus'));
+        this.fixDropdown(document.getElementById('mobilePriority'));
+        this.fixDropdown(document.getElementById('mobileTag'));
     }
 
     updateDragAndDropForScreenSize() {
@@ -1437,6 +1650,35 @@ class TodoApp {
         });
 
         // Drag and drop updated for screen size
+    }
+
+    fixDropdown(selectElement) {
+        if (!selectElement) return;
+        
+        // Prevent event propagation that might interfere with dropdown
+        selectElement.addEventListener('mousedown', (e) => {
+            e.stopPropagation();
+        });
+        selectElement.addEventListener('click', (e) => {
+            e.stopPropagation();
+        });
+        selectElement.addEventListener('focus', (e) => {
+            e.stopPropagation();
+        });
+        selectElement.addEventListener('blur', (e) => {
+            e.stopPropagation();
+        });
+        
+        // Reset dropdown state on each click to prevent it getting stuck
+        selectElement.addEventListener('click', (e) => {
+            // Blur and refocus to reset the dropdown state
+            setTimeout(() => {
+                selectElement.blur();
+                setTimeout(() => {
+                    selectElement.focus();
+                }, 10);
+            }, 10);
+        });
     }
 
     setupTouchGestures() {
@@ -3188,9 +3430,9 @@ class TodoApp {
             // Format tags
             const tags = Array.isArray(task.tags) ? task.tags.join(', ') : (task.tags || '');
 
-            // Format dates
-            const createdDate = task.created_at ? new Date(task.created_at).toLocaleDateString() : '';
-            const dueDate = task.due_date ? new Date(task.due_date).toLocaleDateString() : '';
+            // Format dates in consistent dd/mm/yyyy format for CSV export
+            const createdDate = task.created_at ? this.formatDateForCSV(task.created_at) : '';
+            const dueDate = task.due_date ? this.formatDateForCSV(task.due_date) : '';
 
             return [
                 task.id,
@@ -5525,7 +5767,8 @@ class TodoApp {
                 }
             };
             
-            await window.RobustDataService.importData(importData, { clearExisting: false });
+            const clearExistingCsv = !!document.getElementById('csvClearExisting')?.checked;
+            await window.RobustDataService.importData(importData, { clearExisting: clearExistingCsv });
             
             // Reload tasks
             await this.loadTasks();
@@ -5534,6 +5777,16 @@ class TodoApp {
             this.closeCSVImportModal();
             
             this.showNotification(`Successfully imported ${tasks.length} tasks, ${notes.length} notes, and ${subtasks.length} subtasks from CSV!`, 'success');
+
+            // Ensure cloud sync after CSV import so data is persisted to iCloud/Supabase
+            try {
+                if (window.RobustDataService?.saveToStorage) {
+                    await window.RobustDataService.saveToStorage();
+                }
+                if (window.RobustDataService?.manualSync) {
+                    await window.RobustDataService.manualSync();
+                }
+            } catch (_) {}
             
         } catch (error) {
             console.error('CSV import error:', error);
@@ -5541,14 +5794,77 @@ class TodoApp {
         }
     }
 
+    formatDateForCSV(dateString) {
+        if (!dateString) return '';
+        
+        try {
+            const date = new Date(dateString);
+            if (isNaN(date.getTime())) return '';
+            
+            // Format as dd/mm/yyyy consistently
+            const day = date.getDate().toString().padStart(2, '0');
+            const month = (date.getMonth() + 1).toString().padStart(2, '0');
+            const year = date.getFullYear();
+            
+            return `${day}/${month}/${year}`;
+        } catch (error) {
+            return '';
+        }
+    }
+
     parseDate(dateString) {
         if (!dateString || dateString.trim() === '') return null;
         
         try {
-            // Try to parse various date formats
-            const date = new Date(dateString);
-            if (isNaN(date.getTime())) return null;
-            return date.toISOString();
+            // First try to parse as ISO string (from database)
+            let date = new Date(dateString);
+            if (!isNaN(date.getTime())) {
+                return date.toISOString();
+            }
+            
+            // Try to parse dd/mm/yyyy format (common in CSV exports)
+            const ddmmyyyyPattern = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/;
+            const match = dateString.trim().match(ddmmyyyyPattern);
+            if (match) {
+                const day = parseInt(match[1], 10);
+                const month = parseInt(match[2], 10);
+                const year = parseInt(match[3], 10);
+                
+                // Validate date components
+                if (day >= 1 && day <= 31 && month >= 1 && month <= 12 && year >= 1900) {
+                    // Create date in UTC to avoid timezone issues
+                    date = new Date(Date.UTC(year, month - 1, day));
+                    if (!isNaN(date.getTime())) {
+                        return date.toISOString();
+                    }
+                }
+            }
+            
+            // Try to parse mm/dd/yyyy format (US format)
+            const mmddyyyyPattern = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/;
+            const usMatch = dateString.trim().match(mmddyyyyPattern);
+            if (usMatch) {
+                const month = parseInt(usMatch[1], 10);
+                const day = parseInt(usMatch[2], 10);
+                const year = parseInt(usMatch[3], 10);
+                
+                // Validate date components
+                if (day >= 1 && day <= 31 && month >= 1 && month <= 12 && year >= 1900) {
+                    // Create date in UTC to avoid timezone issues
+                    date = new Date(Date.UTC(year, month - 1, day));
+                    if (!isNaN(date.getTime())) {
+                        return date.toISOString();
+                    }
+                }
+            }
+            
+            // Try other common formats
+            date = new Date(dateString);
+            if (!isNaN(date.getTime())) {
+                return date.toISOString();
+            }
+            
+            return null;
         } catch (error) {
             return null;
         }

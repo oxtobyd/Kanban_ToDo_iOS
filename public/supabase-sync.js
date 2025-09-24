@@ -184,14 +184,17 @@
     }
 
     async function selectProvider() {
-        const provider = (await getPref(STORAGE_KEYS.provider)) || 'icloud';
+        const provider = (await getPref(STORAGE_KEYS.provider)) || 'none';
         if (provider === 'supabase') {
             const ok = await ensureSupabaseSdk();
             if (!ok) { console.error('Supabase SDK not available'); return; }
             window.RobustiCloudSync = new SupabaseSyncAdapter();
             try { await window.RobustiCloudSync.init(); } catch (e) { console.error(e); }
+        } else if (provider === 'none') {
+            // No sync - disable cloud sync
+            window.RobustiCloudSync = null;
         }
-        // else leave existing iCloud adapter as-is
+        // else (icloud) leave existing iCloud adapter as-is
     }
 
     // Expose helpers for UI to save settings

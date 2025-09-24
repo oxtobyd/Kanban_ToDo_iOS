@@ -61,7 +61,7 @@ class TodoApp {
 
     // Sync Settings UI
     async openSyncSettings() {
-        const provider = await window.SyncSettings.get(window.SyncSettings.keys.provider) || 'icloud';
+        const provider = await window.SyncSettings.get(window.SyncSettings.keys.provider) || 'none';
         const supabaseUrl = await window.SyncSettings.get(window.SyncSettings.keys.supabaseUrl) || '';
         const supabaseKey = await window.SyncSettings.get(window.SyncSettings.keys.supabaseAnonKey) || '';
         const html = `
@@ -74,7 +74,8 @@ class TodoApp {
                 <div class="form-group">
                   <label>Sync Provider</label>
                   <select id="syncProvider">
-                    <option value="icloud" ${provider==='icloud'?'selected':''}>iCloud (default)</option>
+                    <option value="none" ${provider==='none'?'selected':''}>No Sync (default)</option>
+                    <option value="icloud" ${provider==='icloud'?'selected':''}>iCloud</option>
                     <option value="supabase" ${provider==='supabase'?'selected':''}>Supabase</option>
                   </select>
                 </div>
@@ -88,6 +89,14 @@ class TodoApp {
                     <input type="password" id="supabaseAnonKey" value="${supabaseKey}" placeholder="Paste anon public key">
                   </div>
                   <div class="form-help">Users must create their own Supabase project and paste credentials here. Data syncs per user project.</div>
+                </div>
+                <div id="testSyncSection" style="${provider==='none'?'display:none;':''}">
+                  <div class="form-group">
+                    <button type="button" id="testSyncBtn" style="background:#10b981;color:#fff;border:none;padding:8px 16px;border-radius:6px;width:100%;" onclick="app.testSyncConnection()">
+                      Test Connection
+                    </button>
+                    <div id="testResult" style="margin-top:8px;padding:8px;border-radius:4px;display:none;"></div>
+                  </div>
                 </div>
                 <div class="form-actions">
                   <button type="button" onclick="app.openSyncHelp()">Help</button>
@@ -104,7 +113,17 @@ class TodoApp {
         select.addEventListener('change', () => {
             const v = select.value;
             document.getElementById('supabaseFields').style.display = v === 'supabase' ? '' : 'none';
+            document.getElementById('testSyncSection').style.display = v === 'none' ? 'none' : '';
+            // Clear previous test results when switching providers
+            const testResult = document.getElementById('testResult');
+            if (testResult) {
+                testResult.style.display = 'none';
+                testResult.innerHTML = '';
+            }
         });
+        
+        // Apply dropdown fix to prevent focus issues
+        this.fixDropdown(select);
     }
 
     closeSyncSettings() {
@@ -213,6 +232,169 @@ grant select, insert, update on public.kanban_sync to anon;
             try { await window.RobustDataService.manualSync(); } catch (_) {}
         }
         alert('Sync settings saved.');
+    }
+
+    async testSyncConnection() {
+        const provider = document.getElementById('syncProvider').value;
+        const testBtn = document.getElementById('testSyncBtn');
+        const testResult = document.getElementById('testResult');
+        
+        // Show loading state
+        testBtn.disabled = true;
+        testBtn.innerHTML = 'Testing...';
+        testResult.style.display = 'none';
+        
+        try {
+            let result;
+            
+            if (provider === 'icloud') {
+                result = await this.testiCloudConnection();
+            } else if (provider === 'supabase') {
+                result = await this.testSupabaseConnection();
+            } else {
+                throw new Error('No sync provider selected');
+            }
+            
+            // Show success result
+            testResult.style.display = 'block';
+            testResult.style.backgroundColor = '#dcfce7';
+            testResult.style.color = '#166534';
+            testResult.style.border = '1px solid #bbf7d0';
+            testResult.innerHTML = `✅ ${result}`;
+            
+        } catch (error) {
+            // Show error result
+            testResult.style.display = 'block';
+            testResult.style.backgroundColor = '#fef2f2';
+            testResult.style.color = '#dc2626';
+            testResult.style.border = '1px solid #fecaca';
+            testResult.innerHTML = `❌ ${error.message}`;
+        } finally {
+            // Reset button
+            testBtn.disabled = false;
+            testBtn.innerHTML = 'Test Connection';
+        }
+    }
+
+    async testiCloudConnection() {
+        if (!window.Capacitor || !window.Capacitor.isNativePlatform()) {
+            throw new Error('iCloud sync is only available on iOS devices');
+        }
+        
+        try {
+            // Create a temporary iCloud service instance for testing (don't interfere with active sync)
+            const testiCloudService = new RobustiCloudSyncService();
+            await testiCloudService.init();
+            
+            // Test if iCloud is available
+            const availability = await testiCloudService.checkiCloudAvailability();
+            if (!availability.available) {
+                throw new Error(`iCloud is not available: ${availability.reason}`);
+            }
+            
+            // Test reading from iCloud
+            const testData = await testiCloudService.loadFromiCloud();
+            
+            // Test writing to iCloud (with a small test object)
+            const testObject = {
+                test: true,
+                timestamp: new Date().toISOString(),
+                deviceId: await window.RobustDataService?.getDeviceId?.() || 'unknown'
+            };
+            
+            await testiCloudService.saveToiCloud(testObject);
+            
+            return 'iCloud connection successful! Sync is working properly.';
+            
+        } catch (error) {
+            if (error.message.includes('not available')) {
+                throw new Error('iCloud is not available. Please check your iCloud settings and make sure you\'re signed in.');
+            } else if (error.message.includes('account')) {
+                throw new Error('iCloud account issue. Please check your iCloud settings.');
+            } else if (error.message.includes('not loaded')) {
+                throw new Error('iCloud sync service is not loaded. Please refresh the app and try again.');
+            } else {
+                throw new Error(`iCloud connection failed: ${error.message}`);
+            }
+        }
+    }
+
+    async testSupabaseConnection() {
+        const url = document.getElementById('supabaseUrl').value.trim();
+        const key = document.getElementById('supabaseAnonKey').value.trim();
+        
+        if (!url || !key) {
+            throw new Error('Please enter both Supabase URL and anon key');
+        }
+        
+        if (!url.startsWith('https://') || !url.includes('.supabase.co')) {
+            throw new Error('Invalid Supabase URL format. Should be: https://your-project.supabase.co');
+        }
+        
+        try {
+            // Load Supabase SDK if not already loaded
+            if (!window.supabase) {
+                await new Promise((resolve, reject) => {
+                    const script = document.createElement('script');
+                    script.src = 'https://unpkg.com/@supabase/supabase-js@2';
+                    script.onload = () => resolve();
+                    script.onerror = () => reject(new Error('Failed to load Supabase SDK'));
+                    document.head.appendChild(script);
+                });
+            }
+            
+            // Create Supabase client with the test credentials
+            const supabase = window.supabase.createClient(url, key);
+            
+            // Test connection by trying to read from the sync table
+            const { data, error } = await supabase
+                .from('kanban_sync')
+                .select('id, data, updated_at')
+                .eq('id', 'kanban-data')
+                .maybeSingle();
+            
+            if (error) {
+                if (error.message.includes('relation') || error.message.includes('does not exist')) {
+                    throw new Error('Supabase table not found. Please run the database setup first.');
+                } else if (error.message.includes('permission') || error.message.includes('auth')) {
+                    throw new Error('Permission denied. Please check your anon key and RLS policies.');
+                } else {
+                    throw new Error(`Database error: ${error.message}`);
+                }
+            }
+            
+            // Test writing (create/update a test record)
+            const testData = {
+                id: 'test_connection',
+                data: { test: true, timestamp: new Date().toISOString(), lastSync: new Date().toISOString() },
+                updated_at: new Date().toISOString()
+            };
+            
+            const { error: insertError } = await supabase
+                .from('kanban_sync')
+                .upsert(testData, { onConflict: 'id' });
+            
+            if (insertError) {
+                throw new Error(`Write test failed: ${insertError.message}`);
+            }
+            
+            // Clean up test record
+            await supabase
+                .from('kanban_sync')
+                .delete()
+                .eq('id', 'test_connection');
+            
+            return 'Supabase connection successful! Database access and sync are working properly.';
+            
+        } catch (error) {
+            if (error.message.includes('Failed to fetch') || error.message.includes('network')) {
+                throw new Error('Network error. Please check your internet connection and Supabase URL.');
+            } else if (error.message.includes('Invalid API key')) {
+                throw new Error('Invalid anon key. Please check your Supabase anon key.');
+            } else {
+                throw new Error(`Supabase connection failed: ${error.message}`);
+            }
+        }
     }
 
     async loadTasks(priority = null, sortBy = null, search = null, includeTags = null, excludeTags = null) {
@@ -617,6 +799,35 @@ grant select, insert, update on public.kanban_sync to anon;
                     this.updateTaskStatus(taskId, newStatus);
                 }
             }
+        });
+    }
+
+    fixDropdown(selectElement) {
+        if (!selectElement) return;
+        
+        // Prevent event propagation that might interfere with dropdown
+        selectElement.addEventListener('mousedown', (e) => {
+            e.stopPropagation();
+        });
+        selectElement.addEventListener('click', (e) => {
+            e.stopPropagation();
+        });
+        selectElement.addEventListener('focus', (e) => {
+            e.stopPropagation();
+        });
+        selectElement.addEventListener('blur', (e) => {
+            e.stopPropagation();
+        });
+        
+        // Reset dropdown state on each click to prevent it getting stuck
+        selectElement.addEventListener('click', (e) => {
+            // Blur and refocus to reset the dropdown state
+            setTimeout(() => {
+                selectElement.blur();
+                setTimeout(() => {
+                    selectElement.focus();
+                }, 10);
+            }, 10);
         });
     }
 
@@ -1831,6 +2042,16 @@ grant select, insert, update on public.kanban_sync to anon;
             
             // Reload tasks
             await this.loadTasks();
+
+            // Ensure cloud sync after import so data is persisted to iCloud/Supabase
+            try {
+                if (window.RobustDataService?.saveToStorage) {
+                    await window.RobustDataService.saveToStorage();
+                }
+                if (window.RobustDataService?.manualSync) {
+                    await window.RobustDataService.manualSync();
+                }
+            } catch (_) {}
             
             // Close modal after a delay
             setTimeout(() => {

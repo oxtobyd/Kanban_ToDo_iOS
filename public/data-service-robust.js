@@ -32,7 +32,7 @@ class RobustDataService {
         }
         
         if (this.isCapacitor) {
-            // Initialize robust iCloud sync
+            // Initialize sync if provider is selected
             if (window.RobustiCloudSync) {
                 await window.RobustiCloudSync.init();
                 
@@ -57,14 +57,16 @@ class RobustDataService {
                     this.notifyChangeListeners();
                 });
 
-                // Load initial data from iCloud
+                // Load initial data from sync provider
                 const cloudData = await window.RobustiCloudSync.loadFromiCloud();
                 if (cloudData && cloudData.hasOwnProperty('tasks')) {
                     await this.importData({ data: cloudData }, { clearExisting: true });
                     this.lastSyncTime = cloudData.lastSync;
                 }
             } else {
-                console.error('Robust iCloud sync not available');
+                // No sync provider selected - load from local storage only
+                console.log('No sync provider selected - using local storage only');
+                await this.loadFromLocalStorage();
             }
         } else {
             await this.loadFromLocalStorage();

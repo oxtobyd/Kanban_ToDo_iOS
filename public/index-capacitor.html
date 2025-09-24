@@ -767,6 +767,16 @@
                         <div class="field-mapping" id="fieldMapping">
                             <!-- Field mappings will be populated by JavaScript -->
                         </div>
+                        <div class="form-group" style="margin:12px 0 8px;">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="csvClearExisting">
+                                <span class="checkmark"></span>
+                                Clear existing data before import
+                            </label>
+                            <p class="import-warning" style="margin-top:6px;">
+                                ⚠️ This will replace all your current tasks, notes, and subtasks with the imported CSV data.
+                            </p>
+                        </div>
                         <div class="mapping-actions">
                             <button class="btn-secondary" onclick="app.goToStep1()">Back</button>
                             <button class="btn-primary" onclick="app.proceedWithImport()">Import Data</button>
