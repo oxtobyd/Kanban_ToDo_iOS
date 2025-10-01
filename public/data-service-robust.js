@@ -62,14 +62,21 @@ class RobustDataService {
                 if (cloudData && cloudData.hasOwnProperty('tasks')) {
                     await this.importData({ data: cloudData }, { clearExisting: true });
                     this.lastSyncTime = cloudData.lastSync;
+                } else {
+                    // No cloud data available (network issue or first time setup) - load from local storage as fallback
+                    console.log('No cloud data available, loading from local storage as fallback');
+                    await this.loadFromLocalStorage();
+                    this.notifyChangeListeners();
                 }
             } else {
                 // No sync provider selected - load from local storage only
                 console.log('No sync provider selected - using local storage only');
                 await this.loadFromLocalStorage();
+                this.notifyChangeListeners();
             }
         } else {
             await this.loadFromLocalStorage();
+            this.notifyChangeListeners();
         }
 
         // Run cleanup on startup and then every 24 hours
@@ -152,11 +159,14 @@ class RobustDataService {
                 
                 const success = await window.RobustiCloudSync.saveToiCloud(exportData.data);
                 
+                // Always save to localStorage as backup, regardless of cloud sync result
+                await this.saveToLocalStorage();
+                
                 if (success) {
                     this.lastSyncTime = exportData.exported_at;
-                    console.log('Successfully saved to iCloud');
+                    console.log('Successfully saved to cloud sync and local storage');
                 } else {
-                    console.error('Failed to save to iCloud');
+                    console.error('Failed to save to cloud sync, but saved to local storage');
                 }
             } else {
                 // Fallback to localStorage
@@ -164,6 +174,13 @@ class RobustDataService {
             }
         } catch (error) {
             console.error('Error saving data:', error);
+            // Critical: Always save to local storage as fallback when any error occurs
+            try {
+                await this.saveToLocalStorage();
+                console.log('Saved to local storage as fallback after error');
+            } catch (localError) {
+                console.error('Failed to save to local storage:', localError);
+            }
         } finally {
             this.syncInProgress = false;
             

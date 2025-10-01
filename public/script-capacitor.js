@@ -1098,7 +1098,7 @@ class TodoApp {
         // Render pending reason if task is pending
         const pendingReasonHTML = (task.status === 'pending') ?
             `<div class="pending-reason">
-                <strong>Pending on:</strong> ${task.pending_on ? this.escapeHtml(task.pending_on) : '<em>No reason specified</em>'}
+                <strong>Pending on:</strong> ${task.pending_reason ? this.escapeHtml(task.pending_reason) : '<em>No reason specified</em>'}
             </div>` : '';
 
         // Get sub-tasks for this task
@@ -2171,7 +2171,7 @@ class TodoApp {
             document.getElementById('taskDescription').value = task.description || '';
             document.getElementById('taskPriority').value = task.priority || 'medium';
             document.getElementById('taskStatus').value = task.status || 'todo';
-            document.getElementById('pendingReason').value = task.pending_on || '';
+            document.getElementById('pendingReason').value = task.pending_reason || '';
             document.getElementById('taskDueDate').value = task.due_date || '';
             this.currentTaskTags = task.tags || [];
             this.togglePendingReason(task.status);
@@ -2264,7 +2264,7 @@ class TodoApp {
             priority,
             status,
             tags,
-            pending_on: status === 'pending' ? pendingReason : null,
+            pending_reason: status === 'pending' ? pendingReason : null,
             due_date: dueDate || null
         };
 

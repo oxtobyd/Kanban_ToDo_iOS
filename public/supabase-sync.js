@@ -186,9 +186,12 @@
     async function selectProvider() {
         const provider = (await getPref(STORAGE_KEYS.provider)) || 'none';
         if (provider === 'supabase') {
-            const ok = await ensureSupabaseSdk();
-            if (!ok) { console.error('Supabase SDK not available'); return; }
+            // Always create SupabaseSyncAdapter, even if SDK fails to load
             window.RobustiCloudSync = new SupabaseSyncAdapter();
+            const ok = await ensureSupabaseSdk();
+            if (!ok) { 
+                console.error('Supabase SDK not available, adapter will use local storage fallback');
+            }
             try { await window.RobustiCloudSync.init(); } catch (e) { console.error(e); }
         } else if (provider === 'none') {
             // No sync - disable cloud sync

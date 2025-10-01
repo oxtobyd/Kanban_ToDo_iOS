@@ -643,9 +643,9 @@ grant select, insert, update on public.kanban_sync to anon;
             </div>` : '';
         
         // Render pending reason if task is pending
-        const pendingReasonHTML = (task.status === 'pending' && task.pending_on) ?
+        const pendingReasonHTML = (task.status === 'pending' && task.pending_reason) ?
             `<div class="pending-reason">
-                <strong>Pending on:</strong> ${this.escapeHtml(task.pending_on)}
+                <strong>Pending on:</strong> ${this.escapeHtml(task.pending_reason)}
             </div>` : '';
         
         // Get sub-tasks for this task
@@ -1140,7 +1140,7 @@ grant select, insert, update on public.kanban_sync to anon;
                 },
                 body: JSON.stringify({ 
                     status: newStatus,
-                    pending_on: pendingReason
+                    pending_reason: pendingReason
                 }),
             });
 
@@ -1224,7 +1224,7 @@ grant select, insert, update on public.kanban_sync to anon;
             document.getElementById('taskDescription').value = task.description || '';
             document.getElementById('taskPriority').value = task.priority || 'medium';
             document.getElementById('taskStatus').value = task.status || 'todo';
-            document.getElementById('pendingReason').value = task.pending_on || '';
+            document.getElementById('pendingReason').value = task.pending_reason || '';
             this.currentTaskTags = task.tags || [];
             this.togglePendingReason(task.status);
         } else {
@@ -1304,7 +1304,7 @@ grant select, insert, update on public.kanban_sync to anon;
             priority,
             status,
             tags,
-            pending_on: status === 'pending' ? pendingReason : null
+            pending_reason: status === 'pending' ? pendingReason : null
         };
 
         try {
