@@ -13,6 +13,8 @@ const filesToCopy = [
     'supabase-sync.js',
     'data-service-robust.js',
     'icloud-sync-robust.js',
+    'offline-test.js',
+    'visual-debug.js',
     'sync-debug.js',
     'sync-migration.js',
     'sync-test.js',

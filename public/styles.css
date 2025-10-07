@@ -1194,6 +1194,23 @@ body[data-theme="dark"] .category-tab.active { background: #4f46e5; border-color
 .header-logo {
     display: flex;
     align-items: center;
+    flex-direction: column;
+    gap: 2px;
+}
+
+/* Offline status indicator */
+.offline-status {
+    display: none;
+    font-size: 11px;
+    color: #f59e0b;
+    font-weight: 500;
+    opacity: 0.8;
+    text-align: center;
+    margin-top: -2px;
+}
+
+body[data-theme="dark"] .offline-status {
+    color: #fbbf24;
 }
 
 /* Mobile app title next to logo */
@@ -2419,8 +2436,10 @@ body[data-theme="dark"] .edit-note-textarea:focus {
         display: flex;
         align-items: center;
         justify-content: center;
+        flex-direction: row;
         flex-shrink: 0;
         min-width: 40px;
+        gap: 8px;
         min-height: 40px;
     }
 
@@ -2449,6 +2468,13 @@ body[data-theme="dark"] .edit-note-textarea:focus {
     
     .logo:active {
         transform: scale(0.95);
+    }
+    
+    /* Mobile offline status */
+    .offline-status {
+        font-size: 10px;
+        margin-top: 0;
+        margin-left: 4px;
     }
     
     /* Hide desktop controls on mobile; integrate search and menu into header */

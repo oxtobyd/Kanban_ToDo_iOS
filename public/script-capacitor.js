@@ -78,7 +78,22 @@ class TodoApp {
         }
 
         // Initialize data service
+        console.log('Initializing RobustDataService...');
+        if (window.debugLog) window.debugLog('Initializing RobustDataService...');
+
         await window.RobustDataService.init();
+
+        const dataLoaded = {
+            tasks: window.RobustDataService.tasks?.length || 0,
+            notes: window.RobustDataService.notes?.length || 0,
+            subtasks: window.RobustDataService.subtasks?.length || 0
+        };
+
+        console.log('RobustDataService initialized, data loaded:', dataLoaded);
+        if (window.debugLog) {
+            window.debugLog(`DataService initialized: ${dataLoaded.tasks} tasks, ${dataLoaded.notes} notes, ${dataLoaded.subtasks} subtasks`,
+                dataLoaded.tasks > 0 ? 'success' : 'warn');
+        }
 
         // Register for data change notifications to refresh UI
         window.__suppressNextAutoRefresh = false;
@@ -87,20 +102,20 @@ class TodoApp {
         window.__syncDisabled = false; // Track if sync is temporarily disabled
         window.RobustDataService.addChangeListener(() => {
             console.log('Change listener triggered - suppressNextAutoRefresh:', window.__suppressNextAutoRefresh, 'lastLocalChange:', window.__lastLocalChange);
-            
+
             if (window.__suppressNextAutoRefresh) {
                 console.log('Suppressing UI refresh due to suppressNextAutoRefresh flag');
                 window.__suppressNextAutoRefresh = false;
                 return;
             }
-            
+
             // Check if we have recent local changes (within last 10 seconds)
             const now = Date.now();
             if (window.__lastLocalChange && (now - window.__lastLocalChange) < 10000) {
                 console.log('Skipping UI refresh - recent local changes detected (age:', now - window.__lastLocalChange, 'ms)');
                 return;
             }
-            
+
             console.log('Data change detected, refreshing UI...');
             this.loadTasks();
 
@@ -137,7 +152,17 @@ class TodoApp {
         if (this.currentCategoryTag) {
             this.currentIncludeTags = [this.currentCategoryTag];
         }
+
+        // Load initial tasks - this should work even offline since data service loads from localStorage first
+        console.log('Loading initial tasks...');
         await this.loadTasks();
+
+        // Force a second load after a short delay to ensure data is displayed
+        // This handles any timing issues with the data service initialization
+        setTimeout(async () => {
+            console.log('Secondary task load to ensure data is displayed...');
+            await this.loadTasks();
+        }, 100);
         this.setupEventListeners();
         this.setupDragAndDrop();
         this.setupTouchGestures();
@@ -155,6 +180,9 @@ class TodoApp {
         this.updateThemeToggleVisual();
         // Start sync health monitoring
         this.startSyncHealthMonitoring();
+
+        // Setup offline/online indicators
+        this.setupOfflineIndicator();
         // Inject a style to disable text selection while dragging
         if (!document.getElementById('no-text-select-style')) {
             const style = document.createElement('style');
@@ -174,14 +202,14 @@ class TodoApp {
     // Sync Settings UI (Capacitor build)
     async openSyncSettings() {
         // Close mobile actions menu if open
-        try { this.closeMobileActions(); } catch (_) {}
+        try { this.closeMobileActions(); } catch (_) { }
         const getPref = async (key, fallback = '') => {
             try {
                 if (window.Capacitor?.Plugins?.Preferences) {
                     const res = await window.Capacitor.Plugins.Preferences.get({ key });
                     return (res && res.value) || fallback;
                 }
-            } catch (_) {}
+            } catch (_) { }
             try { return localStorage.getItem(key) || fallback; } catch (_) { return fallback; }
         };
         const provider = await getPref('sync_provider', 'none');
@@ -197,12 +225,12 @@ class TodoApp {
                 <div class="form-group">
                   <label>Sync Provider</label>
                   <select id="syncProvider">
-                    <option value="none" ${provider==='none'?'selected':''}>No Sync (default)</option>
-                    <option value="icloud" ${provider==='icloud'?'selected':''}>iCloud</option>
-                    <option value="supabase" ${provider==='supabase'?'selected':''}>Supabase</option>
+                    <option value="none" ${provider === 'none' ? 'selected' : ''}>No Sync (default)</option>
+                    <option value="icloud" ${provider === 'icloud' ? 'selected' : ''}>iCloud</option>
+                    <option value="supabase" ${provider === 'supabase' ? 'selected' : ''}>Supabase</option>
                   </select>
                 </div>
-                <div id="supabaseFields" style="${provider==='supabase'?'':'display:none;'}">
+                <div id="supabaseFields" style="${provider === 'supabase' ? '' : 'display:none;'}">
                   <div class="form-group">
                     <label>Supabase URL</label>
                     <input type="text" id="supabaseUrl" value="${supabaseUrl}" placeholder="https://YOUR-PROJECT.supabase.co">
@@ -212,7 +240,7 @@ class TodoApp {
                     <input type="password" id="supabaseAnonKey" value="${supabaseKey}" placeholder="Paste anon public key">
                   </div>
                 </div>
-                <div id="testSyncSection" style="${provider==='none'?'display:none;':''}">
+                <div id="testSyncSection" style="${provider === 'none' ? 'display:none;' : ''}">
                   <div class="form-group">
                     <button type="button" id="testSyncBtn" style="background:#10b981;color:#fff;border:none;padding:8px 16px;border-radius:6px;width:100%;" onclick="app.testSyncConnection()">
                       Test Connection
@@ -234,7 +262,7 @@ class TodoApp {
         const modalEl = container.firstElementChild;
         document.body.appendChild(modalEl);
         // Ensure modal is visible (global CSS defaults modals to display:none)
-        try { modalEl.style.display = 'block'; } catch (_) {}
+        try { modalEl.style.display = 'block'; } catch (_) { }
         const select = document.getElementById('syncProvider');
         select.addEventListener('change', () => {
             const v = select.value;
@@ -247,7 +275,7 @@ class TodoApp {
                 testResult.innerHTML = '';
             }
         });
-        
+
         // Apply dropdown fix to prevent focus issues
         this.fixDropdown(select);
     }
@@ -265,7 +293,7 @@ class TodoApp {
                         const res = await window.Capacitor.Plugins.Preferences.get({ key: 'sync_provider' });
                         return (res && res.value) || 'icloud';
                     }
-                } catch (_) {}
+                } catch (_) { }
                 try { return localStorage.getItem('sync_provider') || 'icloud'; } catch (_) { return 'icloud'; }
             })();
 
@@ -329,7 +357,7 @@ class TodoApp {
         container.innerHTML = html;
         const modalEl = container.firstElementChild;
         document.body.appendChild(modalEl);
-        try { modalEl.style.display = 'block'; } catch (_) {}
+        try { modalEl.style.display = 'block'; } catch (_) { }
     }
 
     closeSyncHelp() {
@@ -344,8 +372,8 @@ class TodoApp {
                     await window.Capacitor.Plugins.Preferences.set({ key, value: value ?? '' });
                     return;
                 }
-            } catch (_) {}
-            try { localStorage.setItem(key, value ?? ''); } catch (_) {}
+            } catch (_) { }
+            try { localStorage.setItem(key, value ?? ''); } catch (_) { }
         };
         const provider = document.getElementById('syncProvider').value;
         await setPref('sync_provider', provider);
@@ -361,24 +389,24 @@ class TodoApp {
         }
         // On a fresh device, pull from cloud immediately to hydrate local state
         if (window.RobustDataService?.manualSync) {
-            try { await window.RobustDataService.manualSync(); } catch (_) {}
+            try { await window.RobustDataService.manualSync(); } catch (_) { }
         }
-        try { alert('Sync settings saved.'); } catch (_) {}
+        try { alert('Sync settings saved.'); } catch (_) { }
     }
 
     async testSyncConnection() {
         const provider = document.getElementById('syncProvider').value;
         const testBtn = document.getElementById('testSyncBtn');
         const testResult = document.getElementById('testResult');
-        
+
         // Show loading state
         testBtn.disabled = true;
         testBtn.innerHTML = 'Testing...';
         testResult.style.display = 'none';
-        
+
         try {
             let result;
-            
+
             if (provider === 'icloud') {
                 result = await this.testiCloudConnection();
             } else if (provider === 'supabase') {
@@ -386,14 +414,14 @@ class TodoApp {
             } else {
                 throw new Error('No sync provider selected');
             }
-            
+
             // Show success result
             testResult.style.display = 'block';
             testResult.style.backgroundColor = '#dcfce7';
             testResult.style.color = '#166534';
             testResult.style.border = '1px solid #bbf7d0';
             testResult.innerHTML = `✅ ${result}`;
-            
+
         } catch (error) {
             // Show error result
             testResult.style.display = 'block';
@@ -412,32 +440,32 @@ class TodoApp {
         if (!window.Capacitor || !window.Capacitor.isNativePlatform()) {
             throw new Error('iCloud sync is only available on iOS devices');
         }
-        
+
         try {
             // Create a temporary iCloud service instance for testing (don't interfere with active sync)
             const testiCloudService = new RobustiCloudSyncService();
             await testiCloudService.init();
-            
+
             // Test if iCloud is available
             const availability = await testiCloudService.checkiCloudAvailability();
             if (!availability.available) {
                 throw new Error(`iCloud is not available: ${availability.reason}`);
             }
-            
+
             // Test reading from iCloud
             const testData = await testiCloudService.loadFromiCloud();
-            
+
             // Test writing to iCloud (with a small test object)
             const testObject = {
                 test: true,
                 timestamp: new Date().toISOString(),
                 deviceId: await window.RobustDataService?.getDeviceId?.() || 'unknown'
             };
-            
+
             await testiCloudService.saveToiCloud(testObject);
-            
+
             return 'iCloud connection successful! Sync is working properly.';
-            
+
         } catch (error) {
             if (error.message.includes('not available')) {
                 throw new Error('iCloud is not available. Please check your iCloud settings and make sure you\'re signed in.');
@@ -454,15 +482,15 @@ class TodoApp {
     async testSupabaseConnection() {
         const url = document.getElementById('supabaseUrl').value.trim();
         const key = document.getElementById('supabaseAnonKey').value.trim();
-        
+
         if (!url || !key) {
             throw new Error('Please enter both Supabase URL and anon key');
         }
-        
+
         if (!url.startsWith('https://') || !url.includes('.supabase.co')) {
             throw new Error('Invalid Supabase URL format. Should be: https://your-project.supabase.co');
         }
-        
+
         try {
             // Load Supabase SDK if not already loaded
             if (!window.supabase) {
@@ -474,17 +502,17 @@ class TodoApp {
                     document.head.appendChild(script);
                 });
             }
-            
+
             // Create Supabase client with the test credentials
             const supabase = window.supabase.createClient(url, key);
-            
+
             // Test connection by trying to read from the sync table
             const { data, error } = await supabase
                 .from('kanban_sync')
                 .select('id, data, updated_at')
                 .eq('id', 'kanban-data')
                 .maybeSingle();
-            
+
             if (error) {
                 if (error.message.includes('relation') || error.message.includes('does not exist')) {
                     throw new Error('Supabase table not found. Please run the database setup first.');
@@ -494,30 +522,30 @@ class TodoApp {
                     throw new Error(`Database error: ${error.message}`);
                 }
             }
-            
+
             // Test writing (create/update a test record)
             const testData = {
                 id: 'test_connection',
                 data: { test: true, timestamp: new Date().toISOString(), lastSync: new Date().toISOString() },
                 updated_at: new Date().toISOString()
             };
-            
+
             const { error: insertError } = await supabase
                 .from('kanban_sync')
                 .upsert(testData, { onConflict: 'id' });
-            
+
             if (insertError) {
                 throw new Error(`Write test failed: ${insertError.message}`);
             }
-            
+
             // Clean up test record
             await supabase
                 .from('kanban_sync')
                 .delete()
                 .eq('id', 'test_connection');
-            
+
             return 'Supabase connection successful! Database access and sync are working properly.';
-            
+
         } catch (error) {
             if (error.message.includes('Failed to fetch') || error.message.includes('network')) {
                 throw new Error('Network error. Please check your internet connection and Supabase URL.');
@@ -612,7 +640,7 @@ class TodoApp {
     async manualSync() {
         // Close mobile actions menu first
         this.closeMobileActions();
-        
+
         if (!window.Capacitor || !window.Capacitor.isNativePlatform()) {
             return;
         }
@@ -716,7 +744,16 @@ class TodoApp {
                 excludeTags: this.currentExcludeTags
             };
 
+            console.log('Loading tasks with filters:', filters);
+            if (window.debugLog) window.debugLog(`Loading tasks with filters: ${JSON.stringify(filters)}`);
+
             this.tasks = await window.RobustDataService.getTasks(filters);
+
+            console.log('Tasks loaded from RobustDataService:', this.tasks?.length || 0);
+            if (window.debugLog) {
+                window.debugLog(`UI loaded ${this.tasks?.length || 0} tasks`,
+                    (this.tasks?.length || 0) > 0 ? 'success' : 'warn');
+            }
             this.renderTasks();
             await this.buildCategoryTabs();
             this.updateFilterButtonIndicator();
@@ -754,7 +791,7 @@ class TodoApp {
 
         // Build from ALL known tags but use current filters for counts
         const allTags = await window.RobustDataService.getTags();
-        
+
         // Apply current filters (search, priority, etc.) but not category filters
         const currentFilters = {
             priority: this.currentPriority || undefined,
@@ -763,7 +800,7 @@ class TodoApp {
             includeTags: undefined, // Don't filter by category for tab counts
             excludeTags: this.currentExcludeTags
         };
-        
+
         const filteredTasks = await window.RobustDataService.getTasks(currentFilters);
         const categories = (Array.isArray(allTags) ? allTags : [])
             .filter(t => typeof t === 'string' && t.startsWith('@'))
@@ -1038,18 +1075,18 @@ class TodoApp {
     async createTaskHTML(task) {
         try {
             // Show due date if available, otherwise show created date
-            const displayDate = task.due_date ? 
-                new Date(task.due_date).toLocaleDateString() : 
+            const displayDate = task.due_date ?
+                new Date(task.due_date).toLocaleDateString() :
                 new Date(task.created_at).toLocaleDateString();
-        const priorityClass = `priority-${task.priority || 'medium'}`;
-        const priorityLabel = this.getPriorityLabel(task.priority || 'medium');
-        const isExpanded = this.expandedTasks && this.expandedTasks.has(task.id);
+            const priorityClass = `priority-${task.priority || 'medium'}`;
+            const priorityLabel = this.getPriorityLabel(task.priority || 'medium');
+            const isExpanded = this.expandedTasks && this.expandedTasks.has(task.id);
 
             // Get notes and subtasks count for this task
             let notesCount = 0;
             let subtasksCount = 0;
             try {
-        const taskNotes = await window.RobustDataService.getNotesByTaskId(task.id);
+                const taskNotes = await window.RobustDataService.getNotesByTaskId(task.id);
                 const taskSubtasks = await window.RobustDataService.getSubtasksByTaskId(task.id);
                 notesCount = taskNotes ? taskNotes.length : 0;
                 subtasksCount = taskSubtasks ? taskSubtasks.length : 0;
@@ -1058,62 +1095,62 @@ class TodoApp {
                 // Continue with 0 counts if there's an error
             }
 
-        // Calculate due date status and days remaining
-        let dueDateStatus = null;
-        let daysRemaining = null;
-        if (task.due_date) {
-            const today = new Date();
-            const dueDate = new Date(task.due_date);
-            const diffTime = dueDate - today;
-            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-            
-            if (diffDays < 0) {
-                dueDateStatus = { type: 'overdue', days: Math.abs(diffDays) };
-                daysRemaining = { text: `-${Math.abs(diffDays)}`, color: 'red' };
-            } else if (diffDays === 0) {
-                dueDateStatus = { type: 'today', days: 0 };
-                daysRemaining = { text: '0', color: 'orange' };
-            } else {
-                dueDateStatus = { type: 'soon', days: diffDays };
-                daysRemaining = { text: `+${diffDays}`, color: 'green' };
+            // Calculate due date status and days remaining
+            let dueDateStatus = null;
+            let daysRemaining = null;
+            if (task.due_date) {
+                const today = new Date();
+                const dueDate = new Date(task.due_date);
+                const diffTime = dueDate - today;
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+                if (diffDays < 0) {
+                    dueDateStatus = { type: 'overdue', days: Math.abs(diffDays) };
+                    daysRemaining = { text: `-${Math.abs(diffDays)}`, color: 'red' };
+                } else if (diffDays === 0) {
+                    dueDateStatus = { type: 'today', days: 0 };
+                    daysRemaining = { text: '0', color: 'orange' };
+                } else {
+                    dueDateStatus = { type: 'soon', days: diffDays };
+                    daysRemaining = { text: `+${diffDays}`, color: 'green' };
+                }
             }
-        }
 
-        // Make URLs clickable and highlight search terms
-        let title = this.makeUrlsClickable(task.title);
-        let description = this.makeUrlsClickable(task.description || '');
+            // Make URLs clickable and highlight search terms
+            let title = this.makeUrlsClickable(task.title);
+            let description = this.makeUrlsClickable(task.description || '');
 
-        if (this.currentSearch) {
-            const searchRegex = new RegExp(`(${this.escapeRegex(this.currentSearch)})`, 'gi');
-            title = title.replace(searchRegex, '<span class="search-highlight">$1</span>');
-            description = description.replace(searchRegex, '<span class="search-highlight">$1</span>');
-        }
+            if (this.currentSearch) {
+                const searchRegex = new RegExp(`(${this.escapeRegex(this.currentSearch)})`, 'gi');
+                title = title.replace(searchRegex, '<span class="search-highlight">$1</span>');
+                description = description.replace(searchRegex, '<span class="search-highlight">$1</span>');
+            }
 
-        // Render tags
-        const tagsHTML = (task.tags && task.tags.length > 0) ?
-            `<div class="task-tags">
+            // Render tags
+            const tagsHTML = (task.tags && task.tags.length > 0) ?
+                `<div class="task-tags">
                 ${task.tags.map(tag => `<span class="task-tag">${this.escapeHtml(tag)}</span>`).join('')}
             </div>` : '';
 
-        // Render pending reason if task is pending
-        const pendingReasonHTML = (task.status === 'pending') ?
-            `<div class="pending-reason">
+            // Render pending reason if task is pending
+            const pendingReasonHTML = (task.status === 'pending') ?
+                `<div class="pending-reason">
                 <strong>Pending on:</strong> ${task.pending_reason ? this.escapeHtml(task.pending_reason) : '<em>No reason specified</em>'}
             </div>` : '';
 
-        // Get sub-tasks for this task
-        const subtasksHTML = await this.renderSubtasks(task.id);
+            // Get sub-tasks for this task
+            const subtasksHTML = await this.renderSubtasks(task.id);
 
-        return `
+            return `
             <div class="task-card ${priorityClass} ${isExpanded ? 'expanded' : ''}" draggable="${this.isDragAndDropEnabled() ? 'true' : 'false'}" data-task-id="${task.id}">
                 <div class="task-header" onclick="app.toggleTaskExpansion(${task.id})" title="Click to expand/collapse task details">
                     <div class="task-title-container">
                         <div class="task-title">${title}</div>
                         <div class="task-created-date">
-                            ${task.due_date ? 
-                                `<span class="due-date-display"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="clock-icon"><circle cx="12" cy="12" r="10"></circle><polyline points="12,6 12,12 16,14"></polyline></svg>${displayDate}${daysRemaining ? ` <span class="days-remaining days-remaining-${daysRemaining.color}">(${daysRemaining.text})</span>` : ''}</span>` : 
-                                `<span class="created-date-display">${displayDate}</span>`
-                            }
+                            ${task.due_date ?
+                    `<span class="due-date-display"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="clock-icon"><circle cx="12" cy="12" r="10"></circle><polyline points="12,6 12,12 16,14"></polyline></svg>${displayDate}${daysRemaining ? ` <span class="days-remaining days-remaining-${daysRemaining.color}">(${daysRemaining.text})</span>` : ''}</span>` :
+                    `<span class="created-date-display">${displayDate}</span>`
+                }
                             ${notesCount > 0 ? '<span class="task-indicator notes-indicator" title="Has notes"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path><polyline points="14,2 14,8 20,8"></polyline></svg></span>' : ''}
                             ${subtasksCount > 0 ? '<span class="task-indicator subtasks-indicator" title="Has subtasks"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9,11 12,14 22,4"></polyline><path d="M21,12v7a2,2 0 0,1-2,2H5a2,2 0 0,1-2-2V5a2,2 0 0,1,2-2h11"></path></svg></span>' : ''}
                         </div>
@@ -1130,9 +1167,9 @@ class TodoApp {
                 <div class="task-meta">
                     <span>Created: ${new Date(task.created_at).toLocaleDateString()}</span>
                     ${dueDateStatus ? `<span class="due-date-indicator ${dueDateStatus.type}">
-                        ${dueDateStatus.type === 'overdue' ? `⚠️ ${dueDateStatus.days} days overdue` : 
-                          dueDateStatus.type === 'today' ? '📅 Due today' : 
-                          `⏰ Due in ${dueDateStatus.days} days`}
+                        ${dueDateStatus.type === 'overdue' ? `⚠️ ${dueDateStatus.days} days overdue` :
+                        dueDateStatus.type === 'today' ? '📅 Due today' :
+                            `⏰ Due in ${dueDateStatus.days} days`}
                     </span>` : ''}
                     <div class="task-actions">
                         <button class="notes-btn" onclick="app.openNotesModal(${task.id})" title="Notes">
@@ -1189,7 +1226,7 @@ class TodoApp {
             // Check if subtasks should be expanded based on our state tracking
             const isExpanded = this.expandedTasks.has(`subtasks-${taskId}`);
             console.log(`Rendering subtasks for task ${taskId}, isExpanded: ${isExpanded}, expandedTasks:`, Array.from(this.expandedTasks));
-            
+
             return `
                 <div class="subtasks-section">
                     <div class="subtasks-header" onclick="app.toggleSubtasksVisibility(${taskId}, event)" title="Click to expand/collapse subtasks">
@@ -1654,7 +1691,7 @@ class TodoApp {
 
     fixDropdown(selectElement) {
         if (!selectElement) return;
-        
+
         // Prevent event propagation that might interfere with dropdown
         selectElement.addEventListener('mousedown', (e) => {
             e.stopPropagation();
@@ -1668,7 +1705,7 @@ class TodoApp {
         selectElement.addEventListener('blur', (e) => {
             e.stopPropagation();
         });
-        
+
         // Reset dropdown state on each click to prevent it getting stuck
         selectElement.addEventListener('click', (e) => {
             // Blur and refocus to reset the dropdown state
@@ -2252,7 +2289,7 @@ class TodoApp {
         const tags = this.currentTaskTags;
 
         if (!title) return;
-        
+
         // Track local change timestamp to prevent sync override
         window.__lastLocalChange = Date.now();
 
@@ -2950,12 +2987,12 @@ class TodoApp {
         `;
 
         document.body.appendChild(modal);
-        
+
         // Focus the textarea
         setTimeout(() => {
             const textarea = document.getElementById('editNoteText');
             if (textarea) {
-        textarea.focus();
+                textarea.focus();
                 textarea.select();
             }
         }, 100);
@@ -2970,17 +3007,17 @@ class TodoApp {
 
     async saveEditNote(noteId) {
         const textarea = document.getElementById('editNoteText');
-            const newContent = textarea.value.trim();
-        
-            if (newContent) {
-                try {
-                    await window.RobustDataService.updateNote(noteId, { content: newContent });
-                    await this.loadNotes(this.currentTaskId);
+        const newContent = textarea.value.trim();
+
+        if (newContent) {
+            try {
+                await window.RobustDataService.updateNote(noteId, { content: newContent });
+                await this.loadNotes(this.currentTaskId);
                 this.closeEditNoteModal();
-                } catch (error) {
-                    console.error('Error updating note:', error);
-                }
+            } catch (error) {
+                console.error('Error updating note:', error);
             }
+        }
     }
 
     async deleteNote(noteId) {
@@ -3008,19 +3045,19 @@ class TodoApp {
 
     async toggleSubtask(subtaskId, checked) {
         console.log('toggleSubtask called with:', { subtaskId, checked });
-        
+
         // Prevent multiple rapid calls to the same subtask
         const key = `toggle_${subtaskId}`;
         if (window.__toggleInProgress && window.__toggleInProgress[key]) {
             console.log('Toggle already in progress for subtask:', subtaskId);
             return;
         }
-        
+
         if (!window.__toggleInProgress) {
             window.__toggleInProgress = {};
         }
         window.__toggleInProgress[key] = true;
-        
+
         try {
             const intended = !!checked;
             // Track local change timestamp to prevent sync override
@@ -3029,12 +3066,12 @@ class TodoApp {
             window.__syncDisabled = true;
             // Suppress change listener notifications during this operation
             window.__suppressNextAutoRefresh = true;
-            
+
             const result = await window.RobustDataService.updateSubtask(subtaskId, { completed: intended });
-            
+
             // Small delay to ensure the update completes before refreshing UI
             await new Promise(resolve => setTimeout(resolve, 100));
-            
+
             // Force refresh UI immediately to show the change
             await this.loadTasks(null, null, null, null, null, true);
             // Ensure checkbox reflects intended state immediately
@@ -3091,13 +3128,13 @@ class TodoApp {
             if (!success) {
                 console.warn('Delete subtask reported false; attempting hard refresh');
             }
-            
+
             // Small delay to ensure the delete completes before refreshing UI
             await new Promise(resolve => setTimeout(resolve, 100));
-            
+
             // Force refresh UI immediately to show the change
             await this.loadTasks(null, null, null, null, null, true);
-            
+
             // Re-enable sync after a delay to allow the save to complete
             setTimeout(() => {
                 window.__syncDisabled = false;
@@ -3160,7 +3197,7 @@ class TodoApp {
             // Expand subtasks
             subtasksList.classList.add('expanded');
             if (toggleIndicator) toggleIndicator.textContent = '▲';
-            
+
             // Remember the expanded state
             this.expandedTasks.add(`subtasks-${taskId}`);
             console.log(`Added subtasks-${taskId} to expandedTasks, now:`, Array.from(this.expandedTasks));
@@ -3168,7 +3205,7 @@ class TodoApp {
             // Collapse subtasks
             subtasksList.classList.remove('expanded');
             if (toggleIndicator) toggleIndicator.textContent = '▼';
-            
+
             // Remove from expanded state
             this.expandedTasks.delete(`subtasks-${taskId}`);
             console.log(`Removed subtasks-${taskId} from expandedTasks, now:`, Array.from(this.expandedTasks));
@@ -3223,7 +3260,7 @@ class TodoApp {
     async exportData() {
         // Close mobile actions menu first
         this.closeMobileActions();
-        
+
         // Show export options modal
         this.openExportOptionsModal();
     }
@@ -3244,7 +3281,7 @@ class TodoApp {
 
     async exportToJSON() {
         this.closeExportOptionsModal();
-        
+
         try {
             const exportData = await window.RobustDataService.exportData();
 
@@ -3321,7 +3358,7 @@ class TodoApp {
 
     async exportToCSV() {
         this.closeExportOptionsModal();
-        
+
         try {
             const exportData = await window.RobustDataService.exportData();
             const csvData = this.convertToCSV(exportData);
@@ -3401,7 +3438,7 @@ class TodoApp {
         // Create CSV header
         const headers = [
             'ID',
-            'Title', 
+            'Title',
             'Description',
             'Status',
             'Priority',
@@ -3498,7 +3535,7 @@ class TodoApp {
     openImportModal() {
         // Close mobile actions menu first
         this.closeMobileActions();
-        
+
         // Show import options modal
         this.openImportOptionsModal();
     }
@@ -3547,7 +3584,7 @@ class TodoApp {
 
         // Reset any existing field mapping selects if present
         const mappingSelects = document.querySelectorAll('.field-mapping-select');
-        mappingSelects.forEach(sel => { try { sel.selectedIndex = 0; } catch (_) {} });
+        mappingSelects.forEach(sel => { try { sel.selectedIndex = 0; } catch (_) { } });
 
         const modal = document.getElementById('csvImportModal');
         modal.style.display = 'block';
@@ -3774,6 +3811,39 @@ class TodoApp {
         }
 
         this.importData = null;
+    }
+
+    showSyncStatus() {
+        if (window.RobustDataService && typeof window.RobustDataService.getSyncStatus === 'function') {
+            const status = window.RobustDataService.getSyncStatus();
+            console.log('=== SYNC STATUS ===');
+            console.log('Last sync:', status.lastSyncTime || 'Never');
+            console.log('Has pending changes:', status.hasPendingChanges);
+            console.log('Online:', status.isOnline);
+            console.log('Sync in progress:', status.syncInProgress);
+            console.log('Data counts:', {
+                tasks: status.totalTasks,
+                notes: status.totalNotes,
+                subtasks: status.totalSubtasks
+            });
+            console.log('Deleted items:', status.deletedItems);
+
+            // Show user-friendly status
+            let statusMessage = '';
+            if (!status.isOnline) {
+                statusMessage = 'Offline - changes saved locally';
+            } else if (status.syncInProgress) {
+                statusMessage = 'Syncing...';
+            } else if (status.hasPendingChanges) {
+                statusMessage = 'Changes pending sync';
+            } else {
+                statusMessage = 'All changes synced';
+            }
+
+            this.showNotification(statusMessage, status.isOnline ? 'success' : 'info');
+            return status;
+        }
+        return null;
     }
 
     showNotification(message, type = 'info') {
@@ -4020,7 +4090,7 @@ class TodoApp {
                         return;
                     }
                 }
-            } catch (_) {}
+            } catch (_) { }
 
             this.showNotification('Syncing...', 'info');
 
@@ -4587,7 +4657,7 @@ class TodoApp {
     openHelpModal() {
         // Close mobile actions menu first
         this.closeMobileActions();
-        
+
         const modal = document.getElementById('helpModal');
         if (modal) {
             modal.style.display = 'block';
@@ -5070,7 +5140,7 @@ class TodoApp {
         try {
             const issueCount = issues.length;
             const message = `Data integrity issues detected ${context}: ${issueCount} problem${issueCount > 1 ? 's' : ''} found. Check console for details.`;
-            
+
             // Show toast notification
             if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Toast) {
                 window.Capacitor.Plugins.Toast.show({
@@ -5081,13 +5151,13 @@ class TodoApp {
                 // Fallback to alert for web
                 alert(message);
             }
-            
+
             // Log detailed issues
             console.warn(`Data integrity issues ${context}:`, issues);
-            
+
             // Update sync status to warning
             this.updateSyncStatusIndicator('warning');
-            
+
         } catch (error) {
             console.error('Failed to show data integrity notification:', error);
         }
@@ -5114,7 +5184,7 @@ class TodoApp {
             // Run the fix process
             if (window.SyncMigration && window.SyncMigration.fixICloudSync) {
                 const result = await window.SyncMigration.fixICloudSync();
-                
+
                 if (result.success) {
                     // Show success message
                     if (window.Capacitor.Plugins.Toast) {
@@ -5125,10 +5195,10 @@ class TodoApp {
                     } else {
                         alert(result.message);
                     }
-                    
+
                     // Update sync status
                     this.updateSyncStatusIndicator('healthy');
-                    
+
                     // Refresh data to show migrated content
                     await this.loadTasks();
                 } else {
@@ -5141,7 +5211,7 @@ class TodoApp {
                     } else {
                         alert(result.message);
                     }
-                    
+
                     this.updateSyncStatusIndicator('error');
                 }
             } else {
@@ -5150,7 +5220,7 @@ class TodoApp {
 
         } catch (error) {
             console.error('Fix iCloud sync failed:', error);
-            
+
             const errorMessage = `Fix iCloud sync failed: ${error.message}`;
             if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Toast) {
                 window.Capacitor.Plugins.Toast.show({
@@ -5160,7 +5230,7 @@ class TodoApp {
             } else {
                 alert(errorMessage);
             }
-            
+
             this.updateSyncStatusIndicator('error');
         } finally {
             // Remove loading indicator
@@ -5194,12 +5264,12 @@ class TodoApp {
             // Run the debug process
             if (window.RobustiCloudSync && window.RobustiCloudSync.debugCrossDeviceSync) {
                 const result = await window.RobustiCloudSync.debugCrossDeviceSync();
-                
+
                 // Show results
-                const message = result.success ? 
+                const message = result.success ?
                     `Debug completed! Check console for details. Device: ${result.debugInfo.deviceId}` :
                     `Debug failed: ${result.error}`;
-                
+
                 if (window.Capacitor.Plugins.Toast) {
                     window.Capacitor.Plugins.Toast.show({
                         text: message,
@@ -5208,17 +5278,17 @@ class TodoApp {
                 } else {
                     alert(message);
                 }
-                
+
                 // Also log to console for Xcode
                 console.log('🔍 Sync Debug Results:', result);
-                
+
             } else {
                 throw new Error('Debug functionality not available');
             }
 
         } catch (error) {
             console.error('Debug sync failed:', error);
-            
+
             const errorMessage = `Debug failed: ${error.message}`;
             if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Toast) {
                 window.Capacitor.Plugins.Toast.show({
@@ -5270,17 +5340,17 @@ class TodoApp {
             // Method 2: Aggressive iCloud refresh with multiple strategies
             console.log('🔄 Attempting aggressive iCloud refresh...');
             let freshData = null;
-            
+
             // Strategy 1: Multiple direct reads with delays
             for (let attempt = 1; attempt <= 5; attempt++) {
                 try {
                     console.log(`Direct iCloud read attempt ${attempt}...`);
-                    
+
                     // Add delay between attempts to allow iCloud to propagate
                     if (attempt > 1) {
                         await new Promise(resolve => setTimeout(resolve, 2000 * attempt));
                     }
-                    
+
                     const result = await window.Capacitor.Plugins.iCloudPreferences.get({
                         key: 'kanban-data'
                     });
@@ -5308,7 +5378,7 @@ class TodoApp {
                     console.log(`Attempt ${attempt} failed:`, error);
                 }
             }
-            
+
             // Strategy 2: Force iCloud refresh by writing and reading
             if (!freshData) {
                 console.log('🔄 Strategy 2: Force iCloud refresh by writing test data...');
@@ -5322,15 +5392,15 @@ class TodoApp {
                             deviceId: window.RobustDataService?.deviceId
                         })
                     });
-                    
+
                     // Wait a moment for iCloud to process
                     await new Promise(resolve => setTimeout(resolve, 3000));
-                    
+
                     // Now try to read the main data again
                     const result = await window.Capacitor.Plugins.iCloudPreferences.get({
                         key: 'kanban-data'
                     });
-                    
+
                     if (result.value) {
                         const data = JSON.parse(result.value);
                         console.log('Strategy 2 got data:', {
@@ -5340,7 +5410,7 @@ class TodoApp {
                         });
                         freshData = data;
                     }
-                    
+
                     // Clean up test data
                     await window.Capacitor.Plugins.iCloudPreferences.remove({
                         key: 'kanban-sync-test'
@@ -5358,15 +5428,15 @@ class TodoApp {
                     await window.Capacitor.Plugins.iCloudPreferences.remove({
                         key: 'kanban-data'
                     });
-                    
+
                     // Wait for iCloud to process the removal
                     await new Promise(resolve => setTimeout(resolve, 2000));
-                    
+
                     // Try to read again - this should trigger a fresh sync
                     const result = await window.Capacitor.Plugins.iCloudPreferences.get({
                         key: 'kanban-data'
                     });
-                    
+
                     if (result.value) {
                         const data = JSON.parse(result.value);
                         console.log('Strategy 3 got data:', {
@@ -5386,7 +5456,7 @@ class TodoApp {
                 await window.RobustDataService.importData({ data: freshData }, { clearExisting: true });
                 window.RobustDataService.lastSyncTime = freshData.lastSync;
                 window.RobustDataService.notifyChangeListeners();
-                
+
                 if (window.Capacitor.Plugins.Toast) {
                     window.Capacitor.Plugins.Toast.show({
                         text: `Updated! Found ${freshData.tasks?.length || 0} tasks`,
@@ -5405,7 +5475,7 @@ class TodoApp {
 
         } catch (error) {
             console.error('Force sync check failed:', error);
-            
+
             const errorMessage = `Force sync failed: ${error.message}`;
             if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Toast) {
                 window.Capacitor.Plugins.Toast.show({
@@ -5477,7 +5547,7 @@ class TodoApp {
 
         } catch (error) {
             console.error('❌ Emergency data recovery failed:', error);
-            
+
             const errorMessage = `Emergency recovery failed: ${error.message}`;
             if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Toast) {
                 window.Capacitor.Plugins.Toast.show({
@@ -5491,6 +5561,33 @@ class TodoApp {
     }
 
     // Periodic sync health monitoring
+    setupOfflineIndicator() {
+        const updateOfflineStatus = () => {
+            const offlineStatus = document.getElementById('offlineStatus');
+            if (offlineStatus) {
+                if (navigator.onLine) {
+                    offlineStatus.style.display = 'none';
+                } else {
+                    offlineStatus.style.display = 'block';
+                }
+            }
+        };
+
+        // Listen for online/offline events
+        window.addEventListener('online', () => {
+            updateOfflineStatus();
+            this.showNotification('Connection restored - syncing data...', 'success');
+        });
+
+        window.addEventListener('offline', () => {
+            updateOfflineStatus();
+            this.showNotification('You\'re now offline - changes will be saved locally', 'info');
+        });
+
+        // Initial status check
+        updateOfflineStatus();
+    }
+
     startSyncHealthMonitoring() {
         if (!window.Capacitor || !window.Capacitor.isNativePlatform()) return;
 
@@ -5531,7 +5628,7 @@ class TodoApp {
 
     handleCSVFileSelection(file) {
         if (!file) return;
-        
+
         if (!file.name.toLowerCase().endsWith('.csv')) {
             this.showNotification('Please select a CSV file', 'error');
             return;
@@ -5545,10 +5642,10 @@ class TodoApp {
     showSelectedCSVFile(fileName) {
         const selectedFile = document.getElementById('csvSelectedFile');
         const fileUpload = document.getElementById('csvFileUpload');
-        
+
         selectedFile.style.display = 'block';
         fileUpload.style.display = 'none';
-        
+
         const fileNameSpan = selectedFile.querySelector('.file-name');
         fileNameSpan.textContent = fileName;
     }
@@ -5557,11 +5654,11 @@ class TodoApp {
         this.csvFile = null;
         this.csvData = null;
         this.csvHeaders = null;
-        
+
         const selectedFile = document.getElementById('csvSelectedFile');
         const fileUpload = document.getElementById('csvFileUpload');
         const fileInput = document.getElementById('csvFileInput');
-        
+
         selectedFile.style.display = 'none';
         fileUpload.style.display = 'block';
         if (fileInput) fileInput.value = '';
@@ -5571,7 +5668,7 @@ class TodoApp {
         try {
             const text = await file.text();
             const lines = text.split('\n').filter(line => line.trim());
-            
+
             if (lines.length === 0) {
                 this.showNotification('CSV file is empty', 'error');
                 return;
@@ -5580,10 +5677,10 @@ class TodoApp {
             // Parse CSV headers
             this.csvHeaders = this.parseCSVLine(lines[0]);
             this.csvData = lines.slice(1).map(line => this.parseCSVLine(line));
-            
+
             // Show field mapping step
             this.showFieldMapping();
-            
+
         } catch (error) {
             console.error('Error parsing CSV:', error);
             this.showNotification('Error reading CSV file: ' + error.message, 'error');
@@ -5594,10 +5691,10 @@ class TodoApp {
         const result = [];
         let current = '';
         let inQuotes = false;
-        
+
         for (let i = 0; i < line.length; i++) {
             const char = line[i];
-            
+
             if (char === '"') {
                 if (inQuotes && line[i + 1] === '"') {
                     // Escaped quote
@@ -5614,7 +5711,7 @@ class TodoApp {
                 current += char;
             }
         }
-        
+
         result.push(current.trim());
         return result;
     }
@@ -5622,10 +5719,10 @@ class TodoApp {
     showFieldMapping() {
         document.getElementById('step1').style.display = 'none';
         document.getElementById('step2').style.display = 'block';
-        
+
         const fieldMapping = document.getElementById('fieldMapping');
         fieldMapping.innerHTML = '';
-        
+
         // Define app fields
         const appFields = [
             { key: 'title', label: 'Title', required: true },
@@ -5639,11 +5736,11 @@ class TodoApp {
             { key: 'subtasks', label: 'Subtasks', required: false },
             { key: 'pending_reason', label: 'Pending Reason', required: false }
         ];
-        
+
         appFields.forEach(field => {
             const mappingRow = document.createElement('div');
             mappingRow.className = 'mapping-row';
-            
+
             mappingRow.innerHTML = `
                 <div class="field-label">
                     <label>${field.label}${field.required ? ' *' : ''}</label>
@@ -5651,13 +5748,13 @@ class TodoApp {
                 <div class="field-select">
                     <select class="field-mapping-select" data-field="${field.key}">
                         <option value="">-- Select CSV Column --</option>
-                        ${this.csvHeaders.map((header, index) => 
-                            `<option value="${index}">${header}</option>`
-                        ).join('')}
+                        ${this.csvHeaders.map((header, index) =>
+                `<option value="${index}">${header}</option>`
+            ).join('')}
                     </select>
                 </div>
             `;
-            
+
             fieldMapping.appendChild(mappingRow);
         });
     }
@@ -5670,7 +5767,7 @@ class TodoApp {
     async proceedWithImport() {
         const mappings = {};
         const selectElements = document.querySelectorAll('.field-mapping-select');
-        
+
         // Collect mappings
         selectElements.forEach(select => {
             const fieldKey = select.dataset.field;
@@ -5679,22 +5776,22 @@ class TodoApp {
                 mappings[fieldKey] = parseInt(csvIndex);
             }
         });
-        
+
         // Validate required fields
         const requiredFields = ['title', 'status'];
         const missingFields = requiredFields.filter(field => mappings[field] === undefined);
-        
+
         if (missingFields.length > 0) {
             this.showNotification(`Please map required fields: ${missingFields.join(', ')}`, 'error');
             return;
         }
-        
+
         try {
             // Convert CSV data to app format
             const tasks = [];
             const notes = [];
             const subtasks = [];
-            
+
             this.csvData.forEach((row, index) => {
                 const taskId = Date.now() + index; // Generate unique ID
                 const task = {
@@ -5708,9 +5805,9 @@ class TodoApp {
                     tags: mappings.tags !== undefined ? this.parseTags(row[mappings.tags]) : [],
                     pending_reason: mappings.pending_reason !== undefined ? row[mappings.pending_reason] : null
                 };
-                
+
                 tasks.push(task);
-                
+
                 // Process notes if mapped
                 if (mappings.notes !== undefined && row[mappings.notes]) {
                     const notesText = row[mappings.notes];
@@ -5727,7 +5824,7 @@ class TodoApp {
                         });
                     }
                 }
-                
+
                 // Process subtasks if mapped
                 if (mappings.subtasks !== undefined && row[mappings.subtasks]) {
                     const subtasksText = row[mappings.subtasks];
@@ -5745,7 +5842,7 @@ class TodoApp {
                                     cleanTitle = subtaskText.replace(/\s*\(Completed\)$/, '');
                                 }
                             }
-                            
+
                             subtasks.push({
                                 id: Date.now() + Math.random() * 1000, // Generate unique ID
                                 task_id: taskId,
@@ -5757,7 +5854,7 @@ class TodoApp {
                     }
                 }
             });
-            
+
             // Import the data
             const importData = {
                 data: {
@@ -5766,16 +5863,16 @@ class TodoApp {
                     subtasks: subtasks
                 }
             };
-            
+
             const clearExistingCsv = !!document.getElementById('csvClearExisting')?.checked;
             await window.RobustDataService.importData(importData, { clearExisting: clearExistingCsv });
-            
+
             // Reload tasks
             await this.loadTasks();
-            
+
             // Close modal
             this.closeCSVImportModal();
-            
+
             this.showNotification(`Successfully imported ${tasks.length} tasks, ${notes.length} notes, and ${subtasks.length} subtasks from CSV!`, 'success');
 
             // Ensure cloud sync after CSV import so data is persisted to iCloud/Supabase
@@ -5786,8 +5883,8 @@ class TodoApp {
                 if (window.RobustDataService?.manualSync) {
                     await window.RobustDataService.manualSync();
                 }
-            } catch (_) {}
-            
+            } catch (_) { }
+
         } catch (error) {
             console.error('CSV import error:', error);
             this.showNotification('Failed to import CSV: ' + error.message, 'error');
@@ -5796,16 +5893,16 @@ class TodoApp {
 
     formatDateForCSV(dateString) {
         if (!dateString) return '';
-        
+
         try {
             const date = new Date(dateString);
             if (isNaN(date.getTime())) return '';
-            
+
             // Format as dd/mm/yyyy consistently
             const day = date.getDate().toString().padStart(2, '0');
             const month = (date.getMonth() + 1).toString().padStart(2, '0');
             const year = date.getFullYear();
-            
+
             return `${day}/${month}/${year}`;
         } catch (error) {
             return '';
@@ -5814,14 +5911,14 @@ class TodoApp {
 
     parseDate(dateString) {
         if (!dateString || dateString.trim() === '') return null;
-        
+
         try {
             // First try to parse as ISO string (from database)
             let date = new Date(dateString);
             if (!isNaN(date.getTime())) {
                 return date.toISOString();
             }
-            
+
             // Try to parse dd/mm/yyyy format (common in CSV exports)
             const ddmmyyyyPattern = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/;
             const match = dateString.trim().match(ddmmyyyyPattern);
@@ -5829,7 +5926,7 @@ class TodoApp {
                 const day = parseInt(match[1], 10);
                 const month = parseInt(match[2], 10);
                 const year = parseInt(match[3], 10);
-                
+
                 // Validate date components
                 if (day >= 1 && day <= 31 && month >= 1 && month <= 12 && year >= 1900) {
                     // Create date in UTC to avoid timezone issues
@@ -5839,7 +5936,7 @@ class TodoApp {
                     }
                 }
             }
-            
+
             // Try to parse mm/dd/yyyy format (US format)
             const mmddyyyyPattern = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/;
             const usMatch = dateString.trim().match(mmddyyyyPattern);
@@ -5847,7 +5944,7 @@ class TodoApp {
                 const month = parseInt(usMatch[1], 10);
                 const day = parseInt(usMatch[2], 10);
                 const year = parseInt(usMatch[3], 10);
-                
+
                 // Validate date components
                 if (day >= 1 && day <= 31 && month >= 1 && month <= 12 && year >= 1900) {
                     // Create date in UTC to avoid timezone issues
@@ -5857,13 +5954,13 @@ class TodoApp {
                     }
                 }
             }
-            
+
             // Try other common formats
             date = new Date(dateString);
             if (!isNaN(date.getTime())) {
                 return date.toISOString();
             }
-            
+
             return null;
         } catch (error) {
             return null;
@@ -5872,7 +5969,7 @@ class TodoApp {
 
     parseTags(tagsString) {
         if (!tagsString || tagsString.trim() === '') return [];
-        
+
         return tagsString.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0);
     }
 
@@ -6030,7 +6127,7 @@ function openTaskModal(taskId = null) {
 // Global debug function for cross-device sync issues
 async function debugCrossDeviceSync() {
     console.log('🔍 Starting cross-device sync debug...');
-    
+
     if (window.RobustiCloudSync && window.RobustiCloudSync.debugCrossDeviceSync) {
         const result = await window.RobustiCloudSync.debugCrossDeviceSync();
         console.log('🔍 Cross-device sync debug result:', result);

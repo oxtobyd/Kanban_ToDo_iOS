@@ -25,11 +25,14 @@
 <body>
     <div class="app" role="application">
         <header class="header" role="banner">
-            <div class="header-logo">
+            <div class="header-logo" id="headerLogo">
                 <img src="logo.svg" alt="Todo Kanban" class="logo">
                 <div class="mobile-app-title" aria-hidden="true">
                     <span class="line-1">Todo</span>
                     <span class="line-2">Kanban</span>
+                </div>
+                <div class="offline-status" id="offlineStatus" style="display: none;">
+                    <span class="offline-text">Offline</span>
                 </div>
             </div>
             <div class="mobile-header-controls">
@@ -415,6 +418,12 @@
     
     <!-- Sync Validator Script -->
     <script src="sync-validator.js"></script>
+    
+    <!-- Visual Debug Script (for offline testing) -->
+    <script src="visual-debug.js"></script>
+    
+    <!-- Offline Test Script -->
+    <script src="offline-test.js"></script>
     
     <!-- Import Modal -->
     <div class="modal" id="importModal" role="dialog" aria-modal="true" aria-labelledby="importModalTitle">

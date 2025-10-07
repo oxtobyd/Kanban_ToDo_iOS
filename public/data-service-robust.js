@@ -17,71 +17,152 @@ class RobustDataService {
     }
 
     async init() {
-        // Initializing Robust Data Service
+        console.log('=== RobustDataService.init() starting ===');
+        if (window.debugLog) window.debugLog('RobustDataService.init() starting...');
         
         // Generate or retrieve device ID for conflict-free ID generation
+        console.log('Initializing device ID...');
         await this.initializeDeviceId();
+        console.log('Device ID initialized:', this.deviceId);
         
         // Ensure the desired sync provider (iCloud or Supabase) is selected before using it
+        console.log('Selecting sync provider...');
         try {
             if (window.SyncSettings && typeof window.SyncSettings.selectProvider === 'function') {
                 await window.SyncSettings.selectProvider();
+                console.log('Sync provider selected successfully');
+            } else {
+                console.log('SyncSettings.selectProvider not available');
             }
         } catch (e) {
             console.warn('Provider select failed or unavailable, continuing with default:', e?.message || e);
+            if (window.debugLog) window.debugLog(`Provider select failed: ${e?.message}`, 'warn');
         }
         
         if (this.isCapacitor) {
-            // Initialize sync if provider is selected
-            if (window.RobustiCloudSync) {
-                await window.RobustiCloudSync.init();
-                
-                // Setup change listener for external updates
-                window.RobustiCloudSync.addChangeListener(async (cloudData) => {
-                    // Check if sync is disabled for local changes
-                    if (window.__syncDisabled) {
-                        console.log('Skipping iCloud import - sync disabled for local changes');
-                        return;
-                    }
-                    
-                    // Check if we have recent local changes (within last 10 seconds)
-                    const now = Date.now();
-                    if (window.__lastLocalChange && (now - window.__lastLocalChange) < 10000) {
-                        console.log('Skipping iCloud import - recent local changes detected (age:', now - window.__lastLocalChange, 'ms)');
-                        return;
-                    }
-                    
-                    // External iCloud change detected, importing
-                    await this.importData({ data: cloudData }, { clearExisting: true });
-                    this.lastSyncTime = cloudData.lastSync;
-                    this.notifyChangeListeners();
+            // Always load from local storage first to ensure offline functionality
+            console.log('Loading from local storage first for offline support...');
+            if (window.debugLog) window.debugLog('Loading from localStorage first...');
+            
+            try {
+                await this.loadFromLocalStorage();
+                console.log('Local storage loaded successfully:', {
+                    tasks: this.tasks?.length || 0,
+                    notes: this.notes?.length || 0,
+                    subtasks: this.subtasks?.length || 0
                 });
+                
+                if (window.debugLog) {
+                    window.debugLog(`Loaded from localStorage: ${this.tasks?.length || 0} tasks, ${this.notes?.length || 0} notes, ${this.subtasks?.length || 0} subtasks`,
+                        (this.tasks?.length || 0) > 0 ? 'success' : 'warn');
+                }
+            } catch (error) {
+                console.error('Error loading from local storage:', error);
+                if (window.debugLog) window.debugLog(`Error loading from localStorage: ${error.message}`, 'error');
+                // Initialize empty arrays if loading fails
+                this.tasks = [];
+                this.notes = [];
+                this.subtasks = [];
+            }
+            
+            // Initialize sync if provider is selected (but don't let it block local data loading)
+            if (window.RobustiCloudSync) {
+                try {
+                    console.log('Initializing cloud sync...');
+                    await window.RobustiCloudSync.init();
+                    console.log('Cloud sync initialized successfully');
+                    
+                    // Setup change listener for external updates
+                    window.RobustiCloudSync.addChangeListener(async (cloudData) => {
+                        // Check if sync is disabled for local changes
+                        if (window.__syncDisabled) {
+                            console.log('Skipping cloud import - sync disabled for local changes');
+                            return;
+                        }
+                        
+                        // Check if we have recent local changes (within last 10 seconds)
+                        const now = Date.now();
+                        if (window.__lastLocalChange && (now - window.__lastLocalChange) < 10000) {
+                            console.log('Skipping cloud import - recent local changes detected (age:', now - window.__lastLocalChange, 'ms)');
+                            return;
+                        }
+                        
+                        // External cloud change detected, importing
+                        await this.importData({ data: cloudData }, { clearExisting: true });
+                        this.lastSyncTime = cloudData.lastSync;
+                        this.notifyChangeListeners();
+                    });
 
-                // Load initial data from sync provider
-                const cloudData = await window.RobustiCloudSync.loadFromiCloud();
-                if (cloudData && cloudData.hasOwnProperty('tasks')) {
-                    await this.importData({ data: cloudData }, { clearExisting: true });
-                    this.lastSyncTime = cloudData.lastSync;
-                } else {
-                    // No cloud data available (network issue or first time setup) - load from local storage as fallback
-                    console.log('No cloud data available, loading from local storage as fallback');
-                    await this.loadFromLocalStorage();
-                    this.notifyChangeListeners();
+                    // Try to load initial data from sync provider (with timeout for offline scenarios)
+                    console.log('Attempting to sync with cloud provider...');
+                    const cloudData = await Promise.race([
+                        window.RobustiCloudSync.loadFromiCloud(),
+                        new Promise((_, reject) => setTimeout(() => reject(new Error('Cloud sync timeout')), 10000))
+                    ]);
+                    
+                    if (cloudData && cloudData.hasOwnProperty('tasks')) {
+                        console.log('Cloud data found, merging with local data...');
+                        // Merge cloud data with local data instead of clearing existing
+                        await this.importData({ data: cloudData }, { clearExisting: false });
+                        this.lastSyncTime = cloudData.lastSync;
+                        console.log('Successfully synced with cloud provider');
+                    } else {
+                        console.log('No cloud data available, using local data');
+                    }
+                } catch (error) {
+                    console.log('Cloud sync failed (offline or network issue), using local data:', error.message);
+                    if (window.debugLog) window.debugLog(`Cloud sync failed: ${error.message} - using local data`, 'warn');
+                    // Local data is already loaded, so we can continue offline
+                    // Make sure we still notify listeners even if sync fails
+                    console.log('Ensuring UI is notified despite sync failure...');
                 }
             } else {
-                // No sync provider selected - load from local storage only
+                // No sync provider selected - using local storage only
                 console.log('No sync provider selected - using local storage only');
-                await this.loadFromLocalStorage();
-                this.notifyChangeListeners();
             }
+            
+            // Always notify listeners after initialization
+            this.notifyChangeListeners();
         } else {
             await this.loadFromLocalStorage();
             this.notifyChangeListeners();
         }
 
+        // FAIL-SAFE: Ensure we have data loaded, regardless of what happened above
+        console.log('Final data check after initialization:', {
+            tasks: this.tasks?.length || 0,
+            notes: this.notes?.length || 0,
+            subtasks: this.subtasks?.length || 0
+        });
+        
+        if (this.isCapacitor && (this.tasks?.length || 0) === 0) {
+            console.log('FAIL-SAFE: No tasks loaded, attempting emergency local storage load...');
+            if (window.debugLog) window.debugLog('FAIL-SAFE: Attempting emergency local storage load...', 'warn');
+            
+            try {
+                await this.loadFromLocalStorage();
+                console.log('Emergency load result:', {
+                    tasks: this.tasks?.length || 0,
+                    notes: this.notes?.length || 0,
+                    subtasks: this.subtasks?.length || 0
+                });
+                
+                if ((this.tasks?.length || 0) > 0) {
+                    console.log('Emergency load successful, notifying UI...');
+                    this.notifyChangeListeners();
+                }
+            } catch (error) {
+                console.error('Emergency load failed:', error);
+                if (window.debugLog) window.debugLog(`Emergency load failed: ${error.message}`, 'error');
+            }
+        }
+
         // Run cleanup on startup and then every 24 hours
         await this.cleanupDeletedItems();
         setInterval(() => this.cleanupDeletedItems(), 24 * 60 * 60 * 1000); // 24 hours
+
+        // Setup network connectivity monitoring for automatic sync when back online
+        this.setupNetworkMonitoring();
 
         // Robust Data Service initialized
     }
@@ -143,43 +224,45 @@ class RobustDataService {
             return;
         }
 
-
         this.syncInProgress = true;
 
         try {
+            // Always save to localStorage first to ensure data persistence
+            await this.saveToLocalStorage();
+            console.log('Data saved to local storage');
+            
             if (this.isCapacitor && window.RobustiCloudSync) {
-                // Use robust iCloud sync
+                // Try to sync to cloud provider
                 const exportData = await this.exportData();
-                console.log('Saving to iCloud - data summary:', {
+                console.log('Attempting cloud sync - data summary:', {
                     tasks: exportData.data.tasks?.length || 0,
                     notes: exportData.data.notes?.length || 0,
                     deletedNotes: exportData.data.notes?.filter(n => n.deleted)?.length || 0,
                     subtasks: exportData.data.subtasks?.length || 0
                 });
                 
-                const success = await window.RobustiCloudSync.saveToiCloud(exportData.data);
-                
-                // Always save to localStorage as backup, regardless of cloud sync result
-                await this.saveToLocalStorage();
-                
-                if (success) {
-                    this.lastSyncTime = exportData.exported_at;
-                    console.log('Successfully saved to cloud sync and local storage');
-                } else {
-                    console.error('Failed to save to cloud sync, but saved to local storage');
+                try {
+                    const success = await window.RobustiCloudSync.saveToiCloud(exportData.data);
+                    
+                    if (success) {
+                        this.lastSyncTime = exportData.exported_at;
+                        console.log('Successfully saved to cloud sync and local storage');
+                    } else {
+                        console.log('Cloud sync failed (likely offline), but data is safely stored locally');
+                    }
+                } catch (cloudError) {
+                    console.log('Cloud sync error (likely offline):', cloudError.message, '- data is safely stored locally');
                 }
-            } else {
-                // Fallback to localStorage
-                await this.saveToLocalStorage();
             }
         } catch (error) {
             console.error('Error saving data:', error);
-            // Critical: Always save to local storage as fallback when any error occurs
+            // Critical: Try to save to local storage again if the first attempt failed
             try {
                 await this.saveToLocalStorage();
                 console.log('Saved to local storage as fallback after error');
             } catch (localError) {
-                console.error('Failed to save to local storage:', localError);
+                console.error('Critical: Failed to save to local storage:', localError);
+                throw localError; // This is a critical error - we can't save data anywhere
             }
         } finally {
             this.syncInProgress = false;
@@ -243,27 +326,103 @@ class RobustDataService {
 
     async loadFromLocalStorage() {
         try {
-            this.tasks = JSON.parse(localStorage.getItem('kanban_tasks') || '[]');
-            this.notes = JSON.parse(localStorage.getItem('kanban_notes') || '[]');
-            this.subtasks = JSON.parse(localStorage.getItem('kanban_subtasks') || '[]');
-            this.nextTaskId = parseInt(localStorage.getItem('kanban_next_task_id') || '1');
-            this.nextNoteId = parseInt(localStorage.getItem('kanban_next_note_id') || '1');
-            this.nextSubtaskId = parseInt(localStorage.getItem('kanban_next_subtask_id') || '1');
+            if (this.isCapacitor && window.Capacitor?.Plugins?.Preferences) {
+                // Use Capacitor Preferences for persistent storage on mobile
+                console.log('Loading from Capacitor Preferences...');
+                const { Preferences } = window.Capacitor.Plugins;
+                
+                const tasksResult = await Preferences.get({ key: 'kanban_tasks' });
+                this.tasks = tasksResult.value ? JSON.parse(tasksResult.value) : [];
+                
+                const notesResult = await Preferences.get({ key: 'kanban_notes' });
+                this.notes = notesResult.value ? JSON.parse(notesResult.value) : [];
+                
+                const subtasksResult = await Preferences.get({ key: 'kanban_subtasks' });
+                this.subtasks = subtasksResult.value ? JSON.parse(subtasksResult.value) : [];
+                
+                const taskIdResult = await Preferences.get({ key: 'kanban_next_task_id' });
+                this.nextTaskId = taskIdResult.value ? parseInt(taskIdResult.value) : 1;
+                
+                const noteIdResult = await Preferences.get({ key: 'kanban_next_note_id' });
+                this.nextNoteId = noteIdResult.value ? parseInt(noteIdResult.value) : 1;
+                
+                const subtaskIdResult = await Preferences.get({ key: 'kanban_next_subtask_id' });
+                this.nextSubtaskId = subtaskIdResult.value ? parseInt(subtaskIdResult.value) : 1;
+                
+                console.log('Loaded from Capacitor Preferences:', {
+                    tasks: this.tasks.length,
+                    notes: this.notes.length,
+                    subtasks: this.subtasks.length
+                });
+            } else {
+                // Fallback to localStorage for web
+                console.log('Loading from web localStorage...');
+                this.tasks = JSON.parse(localStorage.getItem('kanban_tasks') || '[]');
+                this.notes = JSON.parse(localStorage.getItem('kanban_notes') || '[]');
+                this.subtasks = JSON.parse(localStorage.getItem('kanban_subtasks') || '[]');
+                this.nextTaskId = parseInt(localStorage.getItem('kanban_next_task_id') || '1');
+                this.nextNoteId = parseInt(localStorage.getItem('kanban_next_note_id') || '1');
+                this.nextSubtaskId = parseInt(localStorage.getItem('kanban_next_subtask_id') || '1');
+            }
         } catch (error) {
             console.error('Error loading from localStorage:', error);
+            if (window.debugLog) window.debugLog(`Error loading from storage: ${error.message}`, 'error');
         }
+    }
+
+    // Save only to local storage (used by import to avoid race conditions)
+    async saveToLocalStorageOnly() {
+        return await this.saveToLocalStorage();
     }
 
     async saveToLocalStorage() {
         try {
-            localStorage.setItem('kanban_tasks', JSON.stringify(this.tasks));
-            localStorage.setItem('kanban_notes', JSON.stringify(this.notes));
-            localStorage.setItem('kanban_subtasks', JSON.stringify(this.subtasks));
-            localStorage.setItem('kanban_next_task_id', this.nextTaskId.toString());
-            localStorage.setItem('kanban_next_note_id', this.nextNoteId.toString());
-            localStorage.setItem('kanban_next_subtask_id', this.nextSubtaskId.toString());
+            if (this.isCapacitor && window.Capacitor?.Plugins?.Preferences) {
+                // Use Capacitor Preferences for persistent storage on mobile
+                console.log('Saving to Capacitor Preferences...');
+                const { Preferences } = window.Capacitor.Plugins;
+                
+                console.log('About to save to Capacitor Preferences:', {
+                    tasks: this.tasks.length,
+                    notes: this.notes.length,
+                    subtasks: this.subtasks.length,
+                    tasksData: this.tasks.map(t => ({ id: t.id, title: t.title }))
+                });
+                
+                await Preferences.set({ key: 'kanban_tasks', value: JSON.stringify(this.tasks) });
+                await Preferences.set({ key: 'kanban_notes', value: JSON.stringify(this.notes) });
+                await Preferences.set({ key: 'kanban_subtasks', value: JSON.stringify(this.subtasks) });
+                await Preferences.set({ key: 'kanban_next_task_id', value: this.nextTaskId.toString() });
+                await Preferences.set({ key: 'kanban_next_note_id', value: this.nextNoteId.toString() });
+                await Preferences.set({ key: 'kanban_next_subtask_id', value: this.nextSubtaskId.toString() });
+                
+                // Verify the save worked
+                const verifyResult = await Preferences.get({ key: 'kanban_tasks' });
+                const verifyCount = verifyResult.value ? JSON.parse(verifyResult.value).length : 0;
+                
+                console.log('Saved to Capacitor Preferences - verification:', {
+                    intended: this.tasks.length,
+                    actual: verifyCount,
+                    success: verifyCount === this.tasks.length
+                });
+                
+                if (window.debugLog) {
+                    window.debugLog(`Saved to Capacitor Preferences: ${this.tasks.length} tasks → verified: ${verifyCount} tasks`, 
+                        verifyCount === this.tasks.length ? 'success' : 'error');
+                }
+            } else {
+                // Fallback to localStorage for web
+                console.log('Saving to web localStorage...');
+                localStorage.setItem('kanban_tasks', JSON.stringify(this.tasks));
+                localStorage.setItem('kanban_notes', JSON.stringify(this.notes));
+                localStorage.setItem('kanban_subtasks', JSON.stringify(this.subtasks));
+                localStorage.setItem('kanban_next_task_id', this.nextTaskId.toString());
+                localStorage.setItem('kanban_next_note_id', this.nextNoteId.toString());
+                localStorage.setItem('kanban_next_subtask_id', this.nextSubtaskId.toString());
+            }
         } catch (error) {
             console.error('Error saving to localStorage:', error);
+            if (window.debugLog) window.debugLog(`Error saving to storage: ${error.message}`, 'error');
         }
     }
 
@@ -572,13 +731,17 @@ class RobustDataService {
             this.nextSubtaskId = Math.max(this.nextSubtaskId, data.nextSubtaskId || 1);
         }
 
-        // Import completed - don't save back to iCloud to avoid race conditions
-        console.log('Import completed - skipping save to avoid overwriting newer data');
+        // Import completed - save to local storage to ensure offline availability
+        console.log('Import completed - saving merged data to local storage for offline access');
         
-        // Only save to local storage, not iCloud
-        if (!this.isCapacitor) {
-            await this.saveToLocalStorage();
-        }
+        // Use a separate method that only saves to local storage (no cloud sync)
+        // This avoids race conditions with ongoing cloud sync operations
+        await this.saveToLocalStorageOnly();
+        console.log('Imported data saved to local storage:', {
+            tasks: this.tasks.length,
+            notes: this.notes.length,
+            subtasks: this.subtasks.length
+        });
         
         this.notifyChangeListeners();
         
@@ -631,8 +794,13 @@ class RobustDataService {
 
     // Getters
     getTasks(filters = {}) {
+        console.log('getTasks called with filters:', filters);
+        console.log('Total tasks in data service:', this.tasks?.length || 0);
+        console.log('Tasks array:', this.tasks);
+        
         // First filter out deleted tasks
         let filteredTasks = this.tasks.filter(task => !task.deleted);
+        console.log('Non-deleted tasks:', filteredTasks.length);
         
         // Apply filters
         if (filters.priority) {
@@ -740,37 +908,61 @@ class RobustDataService {
         return (subtask && !subtask.deleted) ? subtask : null;
     }
 
-    async updateTaskStatus(taskId, newStatus, pendingReason = null) {
-        const task = this.getTaskById(taskId);
+    hasPendingChanges() {
+        // Check if we have local changes that haven't been synced to the cloud
+        if (!this.lastSyncTime) return true; // No sync time means we have unsaved changes
         
-        if (!task) {
-            console.error('Task not found. Available tasks:', this.tasks.map(t => ({ id: t.id, title: t.title })));
-            throw new Error(`Task not found with ID: ${taskId}`);
-        }
-
-        const updates = {
-            status: newStatus,
-            updated_at: new Date().toISOString()
-        };
-
-        if (newStatus === 'pending' && pendingReason) {
-            updates.pending_reason = pendingReason;
-        } else if (newStatus !== 'pending') {
-            updates.pending_reason = null;
-        }
-
-        const result = await this.updateTask(taskId, updates);
-        return result;
+        // Check if any items have been modified after the last sync
+        const lastSync = new Date(this.lastSyncTime);
+        
+        const hasRecentTasks = this.tasks.some(task => {
+            const updated = new Date(task.updated_at || task.created_at);
+            return updated > lastSync;
+        });
+        
+        const hasRecentNotes = this.notes.some(note => {
+            const updated = new Date(note.updated_at || note.created_at);
+            return updated > lastSync;
+        });
+        
+        const hasRecentSubtasks = this.subtasks.some(subtask => {
+            const updated = new Date(subtask.updated_at || subtask.created_at);
+            return updated > lastSync;
+        });
+        
+        return hasRecentTasks || hasRecentNotes || hasRecentSubtasks;
     }
 
-    // Sync status
+    async updateTaskStatus(taskId, newStatus, pendingReason = null) {
+        const task = this.getTaskById(taskId);
+        if (task) {
+            return await this.updateTask(taskId, { 
+                status: newStatus, 
+                pending_on: pendingReason 
+            });
+        }
+        return null;
+    }
+
+    async updateTaskPriority(taskId, priority) {
+        return await this.updateTask(taskId, { priority });
+    }
+
+    // Additional helper method for debugging sync status
     getSyncStatus() {
         return {
-            isCapacitor: this.isCapacitor,
-            syncInProgress: this.syncInProgress,
             lastSyncTime: this.lastSyncTime,
-            pendingChanges: this.pendingChanges,
-            hasRobustSync: !!window.RobustiCloudSync
+            hasPendingChanges: this.hasPendingChanges(),
+            isOnline: navigator.onLine,
+            syncInProgress: this.syncInProgress,
+            totalTasks: this.tasks.filter(t => !t.deleted).length,
+            totalNotes: this.notes.filter(n => !n.deleted).length,
+            totalSubtasks: this.subtasks.filter(s => !s.deleted).length,
+            deletedItems: {
+                tasks: this.tasks.filter(t => t.deleted).length,
+                notes: this.notes.filter(n => n.deleted).length,
+                subtasks: this.subtasks.filter(s => s.deleted).length
+            }
         };
     }
 
@@ -833,6 +1025,49 @@ class RobustDataService {
     }
 
     // Cleanup old deleted items (tombstones) older than 30 days
+    setupNetworkMonitoring() {
+        // Monitor network connectivity for automatic sync when back online
+        if (typeof window !== 'undefined') {
+            // Web/Capacitor network monitoring
+            const handleOnline = async () => {
+                console.log('Network connection restored - attempting automatic sync...');
+                if (window.RobustiCloudSync) {
+                    try {
+                        await this.manualSync();
+                        console.log('Automatic sync completed successfully');
+                    } catch (error) {
+                        console.log('Automatic sync failed:', error.message);
+                    }
+                }
+            };
+
+            const handleOffline = () => {
+                console.log('Network connection lost - app is now offline');
+            };
+
+            // Listen for online/offline events
+            window.addEventListener('online', handleOnline);
+            window.addEventListener('offline', handleOffline);
+
+            // For Capacitor apps, also listen to app state changes
+            if (this.isCapacitor && window.Capacitor?.Plugins?.App) {
+                window.Capacitor.Plugins.App.addListener('appStateChange', async (state) => {
+                    if (state.isActive && navigator.onLine) {
+                        console.log('App became active and online - attempting sync...');
+                        setTimeout(handleOnline, 1000); // Small delay to ensure network is stable
+                    }
+                });
+            }
+
+            // Initial network status check
+            if (navigator.onLine) {
+                console.log('App started with network connection available');
+            } else {
+                console.log('App started offline - local data will be used');
+            }
+        }
+    }
+
     async cleanupDeletedItems() {
         const thirtyDaysAgo = new Date();
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);

@@ -98,41 +98,78 @@
 
         async saveToiCloud(data) { // keep API name for compatibility
             if (!this.client) return false;
-            // Upsert the single JSON document
-            const payload = {
-                id: this.rowId,
-                data: {
-                    ...data,
-                    lastSync: data.lastSync || nowIso()
-                },
-                updated_at: new Date()
-            };
-            const { error } = await this.client
-                .from(this.table)
-                .upsert(payload, { onConflict: 'id' });
-            if (error) {
-                console.error('Supabase upsert error:', error);
+            
+            try {
+                // Upsert the single JSON document
+                const payload = {
+                    id: this.rowId,
+                    data: {
+                        ...data,
+                        lastSync: data.lastSync || nowIso()
+                    },
+                    updated_at: new Date()
+                };
+                
+                const { error } = await this.client
+                    .from(this.table)
+                    .upsert(payload, { onConflict: 'id' });
+                    
+                if (error) {
+                    console.error('Supabase upsert error:', error);
+                    // Check if it's a network error
+                    if (error.message && (error.message.includes('fetch') || error.message.includes('network'))) {
+                        console.log('Network error during save - app is likely offline');
+                        return false; // Return false but don't throw, let local storage handle it
+                    }
+                    return false;
+                }
+                
+                this.lastKnown = payload.data.lastSync;
+                console.log('Successfully saved to Supabase');
+                return true;
+            } catch (error) {
+                // Handle network errors gracefully
+                if (error.message && (error.message.includes('fetch') || error.message.includes('network'))) {
+                    console.log('Supabase save failed - network unavailable, data saved locally');
+                    return false; // Return false but don't throw, let local storage handle it
+                }
+                console.error('Supabase save error:', error);
                 return false;
             }
-            this.lastKnown = payload.data.lastSync;
-            return true;
         }
 
         async loadFromiCloud() { // keep API name for compatibility
             if (!this.client) return null;
-            const { data, error } = await this.client
-                .from(this.table)
-                .select('data')
-                .eq('id', this.rowId)
-                .single();
-            if (error) {
-                if (error.code !== 'PGRST116') { // not found is ok
-                    console.error('Supabase load error:', error);
+            
+            try {
+                const { data, error } = await this.client
+                    .from(this.table)
+                    .select('data')
+                    .eq('id', this.rowId)
+                    .single();
+                    
+                if (error) {
+                    if (error.code !== 'PGRST116') { // not found is ok
+                        console.error('Supabase load error:', error);
+                        // Check if it's a network error
+                        if (error.message && (error.message.includes('fetch') || error.message.includes('network'))) {
+                            console.log('Network error detected - app is likely offline');
+                            throw new Error('Network unavailable - offline mode');
+                        }
+                    }
+                    return null;
                 }
+                this.lastKnown = data?.data?.lastSync || null;
+                return data?.data || null;
+            } catch (error) {
+                // Handle network errors gracefully
+                if (error.message && (error.message.includes('fetch') || error.message.includes('network') || error.message.includes('offline'))) {
+                    console.log('Supabase offline - network unavailable');
+                    throw new Error('Network unavailable - offline mode');
+                }
+                console.error('Supabase load error:', error);
                 return null;
             }
-            this.lastKnown = data?.data?.lastSync || null;
-            return data?.data || null;
         }
 
         async checkForUpdates(currentData) {
@@ -145,6 +182,35 @@
                 cloudSync: remote.lastSync || null,
                 data: remote
             };
+        }
+
+        async checkiCloudAvailability() {
+            // For Supabase, check if we have valid configuration and can connect
+            if (!this.client) {
+                return { available: false, reason: 'Supabase client not initialized' };
+            }
+
+            try {
+                // Test connection with a simple query
+                const { error } = await this.client
+                    .from(this.table)
+                    .select('id')
+                    .limit(1);
+
+                if (error) {
+                    if (error.message && (error.message.includes('fetch') || error.message.includes('network'))) {
+                        return { available: false, reason: 'Network unavailable - offline mode' };
+                    }
+                    return { available: false, reason: `Supabase error: ${error.message}` };
+                }
+
+                return { available: true, reason: 'Supabase connection available' };
+            } catch (error) {
+                if (error.message && (error.message.includes('fetch') || error.message.includes('network'))) {
+                    return { available: false, reason: 'Network unavailable - offline mode' };
+                }
+                return { available: false, reason: `Connection error: ${error.message}` };
+            }
         }
 
         async ensureSchema() {
