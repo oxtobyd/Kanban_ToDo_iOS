@@ -12,20 +12,35 @@ class VisualDebugger {
     init() {
         this.createDebugPanel();
         this.setupToggle();
+        this.setupKeyboardShortcuts();
         this.log('Visual Debugger initialized');
+    }
+
+    setupKeyboardShortcuts() {
+        // Close debug panel with Escape key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && this.isVisible) {
+                this.toggle();
+                e.preventDefault();
+            }
+        });
     }
 
     createDebugPanel() {
         // Create debug panel
         this.debugPanel = document.createElement('div');
         this.debugPanel.id = 'visualDebugPanel';
+        // Responsive positioning - leave more space at top on tablets/mobile
+        const isTabletOrMobile = window.innerWidth <= 1024;
+        const topPosition = isTabletOrMobile ? '100px' : '80px';
+        
         this.debugPanel.style.cssText = `
             position: fixed;
-            top: 50px;
+            top: ${topPosition};
             left: 10px;
             right: 10px;
             bottom: 10px;
-            background: rgba(0, 0, 0, 0.9);
+            background: rgba(0, 0, 0, 0.95);
             color: #00ff00;
             font-family: 'Courier New', monospace;
             font-size: 12px;
@@ -35,6 +50,7 @@ class VisualDebugger {
             display: none;
             overflow-y: auto;
             border: 2px solid #00ff00;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
         `;
 
         // Create header
@@ -50,9 +66,10 @@ class VisualDebugger {
         header.innerHTML = `
             <div style="display: flex; justify-content: space-between; align-items: center;">
                 <span>🐛 Visual Debug Console</span>
-                <div>
-                    <button onclick="window.VisualDebugger.createTestTask()" style="background: #10b981; color: white; border: none; padding: 2px 8px; border-radius: 4px; font-size: 10px; margin-right: 4px;">Test Save</button>
+                <div style="display: flex; align-items: center; gap: 4px;">
+                    <button onclick="window.VisualDebugger.createTestTask()" style="background: #10b981; color: white; border: none; padding: 2px 8px; border-radius: 4px; font-size: 10px;">Test Save</button>
                     <button onclick="window.VisualDebugger.clear()" style="background: #ff4444; color: white; border: none; padding: 2px 8px; border-radius: 4px; font-size: 10px;">Clear</button>
+                    <button onclick="window.VisualDebugger.toggle()" style="background: #6b7280; color: white; border: none; padding: 2px 8px; border-radius: 4px; font-size: 10px; margin-left: 4px;" title="Close debug panel">✕</button>
                 </div>
             </div>
         `;
