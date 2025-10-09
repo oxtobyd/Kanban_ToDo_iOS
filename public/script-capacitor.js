@@ -1133,9 +1133,10 @@ class TodoApp {
             </div>` : '';
 
             // Render pending reason if task is pending
+            // Check both pending_on (new) and pending_reason (legacy) for backward compatibility
             const pendingReasonHTML = (task.status === 'pending') ?
                 `<div class="pending-reason">
-                <strong>Pending on:</strong> ${task.pending_reason ? this.escapeHtml(task.pending_reason) : '<em>No reason specified</em>'}
+                <strong>Pending on:</strong> ${(task.pending_on || task.pending_reason) ? this.escapeHtml(task.pending_on || task.pending_reason) : '<em>No reason specified</em>'}
             </div>` : '';
 
             // Get sub-tasks for this task
@@ -2208,7 +2209,7 @@ class TodoApp {
             document.getElementById('taskDescription').value = task.description || '';
             document.getElementById('taskPriority').value = task.priority || 'medium';
             document.getElementById('taskStatus').value = task.status || 'todo';
-            document.getElementById('pendingReason').value = task.pending_reason || '';
+            document.getElementById('pendingReason').value = task.pending_on || task.pending_reason || '';
             document.getElementById('taskDueDate').value = task.due_date || '';
             this.currentTaskTags = task.tags || [];
             this.togglePendingReason(task.status);
@@ -2301,7 +2302,7 @@ class TodoApp {
             priority,
             status,
             tags,
-            pending_reason: status === 'pending' ? pendingReason : null,
+            pending_on: status === 'pending' ? pendingReason : null,
             due_date: dueDate || null
         };
 
@@ -3482,7 +3483,7 @@ class TodoApp {
                 this.escapeCSV(tags),
                 this.escapeCSV(taskNotes),
                 this.escapeCSV(taskSubtasks),
-                this.escapeCSV(task.pending_reason || '')
+                this.escapeCSV(task.pending_on || task.pending_reason || '')
             ];
         });
 
@@ -5734,7 +5735,7 @@ class TodoApp {
             { key: 'tags', label: 'Tags', required: false },
             { key: 'notes', label: 'Notes', required: false },
             { key: 'subtasks', label: 'Subtasks', required: false },
-            { key: 'pending_reason', label: 'Pending Reason', required: false }
+            { key: 'pending_on', label: 'Pending Reason', required: false }
         ];
 
         appFields.forEach(field => {
@@ -5803,7 +5804,7 @@ class TodoApp {
                     created_at: mappings.created_at !== undefined ? this.parseDate(row[mappings.created_at]) : new Date().toISOString(),
                     due_date: mappings.due_date !== undefined ? this.parseDate(row[mappings.due_date]) : null,
                     tags: mappings.tags !== undefined ? this.parseTags(row[mappings.tags]) : [],
-                    pending_reason: mappings.pending_reason !== undefined ? row[mappings.pending_reason] : null
+                    pending_on: mappings.pending_on !== undefined ? row[mappings.pending_on] : null
                 };
 
                 tasks.push(task);

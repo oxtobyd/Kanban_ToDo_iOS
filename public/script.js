@@ -643,9 +643,10 @@ grant select, insert, update on public.kanban_sync to anon;
             </div>` : '';
         
         // Render pending reason if task is pending
-        const pendingReasonHTML = (task.status === 'pending' && task.pending_reason) ?
+        // Check both pending_on (new) and pending_reason (legacy) for backward compatibility
+        const pendingReasonHTML = (task.status === 'pending' && (task.pending_on || task.pending_reason)) ?
             `<div class="pending-reason">
-                <strong>Pending on:</strong> ${this.escapeHtml(task.pending_reason)}
+                <strong>Pending on:</strong> ${this.escapeHtml(task.pending_on || task.pending_reason)}
             </div>` : '';
         
         // Get sub-tasks for this task
@@ -1138,9 +1139,9 @@ grant select, insert, update on public.kanban_sync to anon;
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ 
+                body: JSON.stringify({
                     status: newStatus,
-                    pending_reason: pendingReason
+                    pending_on: pendingReason
                 }),
             });
 
@@ -1224,7 +1225,7 @@ grant select, insert, update on public.kanban_sync to anon;
             document.getElementById('taskDescription').value = task.description || '';
             document.getElementById('taskPriority').value = task.priority || 'medium';
             document.getElementById('taskStatus').value = task.status || 'todo';
-            document.getElementById('pendingReason').value = task.pending_reason || '';
+            document.getElementById('pendingReason').value = task.pending_on || task.pending_reason || '';
             this.currentTaskTags = task.tags || [];
             this.togglePendingReason(task.status);
         } else {
@@ -1304,7 +1305,7 @@ grant select, insert, update on public.kanban_sync to anon;
             priority,
             status,
             tags,
-            pending_reason: status === 'pending' ? pendingReason : null
+            pending_on: status === 'pending' ? pendingReason : null
         };
 
         try {
